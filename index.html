@@ -110,10 +110,28 @@ label.check input{width:22px;height:22px;min-height:0}
 .spark{width:100%;height:60px;display:block}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:20;font-size:.9rem}
 @media (prefers-reduced-motion:no-preference){.pt{transition:transform .08s}.pt:active{transform:scale(.99)}}
+.abadge{display:flex;gap:6px;flex-wrap:wrap}
+.abadge b{font-size:.75rem;padding:1px 8px;border-radius:999px}
+.ah{background:var(--red-bg);color:var(--red)} .am{background:var(--orange-bg);color:var(--orange)}
+.alerts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.al{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--none)}
+.al span{min-width:0;font-size:.92rem}
+.al-high{border-left-color:var(--red);background:var(--red-bg)} .al-med{border-left-color:var(--orange)} .al-info{border-left-color:var(--accent)}
+button.small{min-height:34px;padding:5px 10px;font-size:.85rem;white-space:nowrap}
+.row-between{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.ck{font-size:.88rem;margin-top:4px}
+.ck-high{color:var(--red);font-weight:700} .ck-low,.ck-noweight{color:var(--orange);font-weight:700} .ck-ok{color:var(--green)} .ck-unknown{color:var(--muted)}
+.fl-critical{color:var(--red);font-weight:700} .fl-high,.fl-low{color:var(--orange);font-weight:700}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.tab{border-radius:999px;padding:7px 14px;min-height:38px}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.big{font-size:1.5rem;font-weight:600;font-variant-numeric:tabular-nums}
+.warnpanel{border-color:var(--orange);background:var(--orange-bg)}
 </style>
 </head><body>
 <header class="top"><div class="wrap">
   <div class="brand"><b>Paediatrics Ward Rounds</b><span>GMC Amritsar · Guru Nanak Dev Hospital</span></div>
+  <button class="ghost" data-action="calc" id="btn-calc">Calculators</button>
   <button class="ghost" data-action="home" id="btn-home">Ward</button>
 </div></header>
 <main class="wrap" id="app"></main>
@@ -209,6 +227,7 @@ function seed(){
      vitals:[{at:iso(now-1*36e5),hr:132,rr:34,spo2:98,wob:"mild",crt:3,avpu:"V",temp:37.2,sbp:96,sugar:412,gcs:13}]})
   ];
   S.patients[1].notes=[{at:new Date(now-14*36e5).toISOString(),s:"Feeding less since morning",o:"Subcostal retractions, bilateral crepts",a:"Bronchiolitis, day 3 of illness",p:"O₂ to keep SpO₂ ≥ 92%, NG feeds, nasal suction"}];
+  seedP2();
   save();
 }
 
@@ -220,6 +239,7 @@ function when(iso){const d=new Date(iso);return d.toLocaleDateString("en-IN",{da
 function since(iso){const h=(Date.now()-new Date(iso).getTime())/36e5;return h<1?Math.max(1,Math.round(h*60))+" min ago":h<48?Math.round(h)+" h ago":Math.round(h/24)+" d ago"}
 function trendText(t){return t==="worse"?"▲ worse":t==="better"?"▼ better":t==="same"?"= same":""}
 function render(){
+  if(typeof P2VIEWS!=="undefined"&&P2VIEWS[view.name])return render2();
   const app=$("#app");
   if(view.name==="ward")app.innerHTML=wardView();
   else if(view.name==="patient")app.innerHTML=patientView(get(view.id));
@@ -255,6 +275,7 @@ function wardView(){
         <span class="dx">${esc(p.diagnosis||"Diagnosis not entered")}</span>
         ${s.red.length?`<span class="flagline">⚠ ${esc(s.red[0])}${s.red.length>1?` +${s.red.length-1} more`:""}</span>`:""}
         ${p.override?`<span class="meta">Colour set manually: ${esc(p.override.reason)}</span>`:""}
+        ${alertBadge(p)}
       </span>
       <span class="side"><span class="score">${s.score==null?"–":s.score}</span><span class="trend ${s.trend||""}">${trendText(s.trend)}</span><span class="trend">${lv?since(lv.at):"no vitals"}</span></span>
     </button>`});
@@ -282,12 +303,14 @@ function patientView(p){
   if(s.red.length)h+=`<div><b>Danger signs</b><ul>${s.red.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
   if(s.warn.length)h+=`<div><b>Also check</b><ul>${s.warn.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
   h+=`</div>`;
-  h+=`<div class="actions"><button class="primary" data-action="vitals" data-id="${p.id}">Add vitals</button><button data-action="note" data-id="${p.id}">Progress note</button><button data-action="override" data-id="${p.id}">Set colour</button></div>`;
+  h+=`<div class="actions"><button class="primary" data-action="vitals" data-id="${p.id}">Add vitals</button><button data-action="note" data-id="${p.id}">Progress note</button><button data-action="checks" data-id="${p.id}">Checklist</button><button data-action="meds" data-id="${p.id}">Medicines</button><button data-action="inv" data-id="${p.id}">Investigations</button><button data-action="lines" data-id="${p.id}">Lines</button><button data-action="calc" data-id="${p.id}">Calculators</button><button class="ghost" data-action="override" data-id="${p.id}">Set colour</button></div>`;
+  h+=alertsPanel(p);
   h+=`<h3>Latest vitals ${v?"· "+when(v.at):""}</h3>`;
   if(v){h+=`<div class="vgrid">${vbox("HR",v.hr,"/min",pt("Heart rate"))}${vbox("RR",v.rr,"/min",pt("Resp. rate"))}${vbox("SpO₂",v.spo2,"%",pt("SpO₂"))}${vbox("Temp",v.temp,"°C",pt("Temp"))}${vbox("CRT",v.crt,"s",pt("CRT"))}${vbox("SBP",v.sbp,"mmHg",v.sbp!=null&&v.sbp<minSBP(p.dob)?3:null)}${vbox("AVPU",v.avpu,"",pt("AVPU"))}${vbox("GCS",v.gcs,"/15",v.gcs!=null&&v.gcs<=8?3:null)}${vbox("Sugar",v.sugar,"mg/dL",null)}${vbox("Urine",v.uo,"mL/kg/h",null)}${vbox("O₂",v.o2?(v.o2==="high"?"High-flow":"Low-flow"):"Air","",pt("On oxygen"))}${vbox("Breathing",v.wob||"–","",pt("Work of breathing"))}</div>`;
     h+=`<p class="muted" style="font-size:.82rem">Ranges used: ${R.label} · HR ${R.hr.join("–")} · RR ${R.rr.join("–")} · min SBP ${minSBP(p.dob)}</p>`;
     h+=`<h3>Score breakdown</h3><div class="tablewrap"><table><thead><tr><th>Parameter</th><th>Value</th><th>Points</th></tr></thead><tbody>${s.parts.map(x=>`<tr><td>${x.name}${x.why?` <span class="muted">(${x.why})</span>`:""}</td><td class="mono">${esc(x.val)}</td><td class="mono">${x.pts}</td></tr>`).join("")}<tr><td><b>Total</b></td><td></td><td class="mono"><b>${s.score}</b></td></tr></tbody></table></div>`;
   }else h+=`<div class="panel muted">No vitals recorded yet.</div>`;
+  h+=medsSummary(p)+invSummary(p);
   if(p.vitals.length>1){h+=`<h3>Score trend</h3><div class="panel">${spark(p)}</div>`}
   if(p.vitals.length){h+=`<h3>Vitals log</h3><div class="tablewrap"><table><thead><tr><th>Time</th><th>PEWS</th><th>HR</th><th>RR</th><th>SpO₂</th><th>T</th><th>CRT</th><th>SBP</th><th>AVPU</th><th>Sugar</th></tr></thead><tbody>${p.vitals.slice().reverse().map(x=>{const a=assess(p,x);return`<tr class="lv-${a.level}"><td class="mono">${when(x.at)}</td><td class="mono" style="color:var(--c);font-weight:600">${a.score}</td><td class="mono">${x.hr??"–"}</td><td class="mono">${x.rr??"–"}</td><td class="mono">${x.spo2??"–"}</td><td class="mono">${x.temp??"–"}</td><td class="mono">${x.crt??"–"}</td><td class="mono">${x.sbp??"–"}</td><td class="mono">${x.avpu||"–"}</td><td class="mono">${x.sugar??"–"}</td></tr>`}).join("")}</tbody></table></div>`}
   h+=`<h3>Progress notes</h3>`;
@@ -428,8 +451,8 @@ document.addEventListener("submit",e=>{
     const d={name:g("f-name"),dob:g("f-dob"),sex:g("f-sex"),ipd:g("f-ipd"),bed:g("f-bed"),unit:g("f-unit"),consultant:g("f-consultant"),admittedAt:new Date(g("f-admitted")||Date.now()).toISOString(),weight:num(g("f-weight")),diagnosis:g("f-dx"),gaWeeks:num(g("f-ga")),birthWeight:num(g("f-bw")),referredFrom:g("f-ref"),transport:g("f-transport"),scheme:g("f-scheme")};
     if(!d.name||!d.dob){toast("Name and date of birth are required");return}
     if(new Date(d.dob)>new Date()){toast("Date of birth can't be in the future");return}
-    if(id){Object.assign(get(id),d);save();view={name:"patient",id};toast("Details saved")}
-    else{const p=Object.assign({id:uid(),status:"admitted",vitals:[],notes:[],override:null},d);S.patients.push(p);save();view={name:"vitals",id:p.id};toast("Admitted. Enter first vitals")}
+    if(id){const P=get(id);if(d.weight&&d.weight!==P.weight)P.weights.push({at:new Date().toISOString(),kg:d.weight});Object.assign(P,d);save();view={name:"patient",id};toast("Details saved")}
+    else{const p=Object.assign({id:uid(),status:"admitted",vitals:[],notes:[],override:null},d);normalize(p);if(d.weight)p.weights=[{at:new Date().toISOString(),kg:d.weight}];S.patients.push(p);save();view={name:"vitals",id:p.id};toast("Admitted. Enter first vitals")}
     render();if(view.name==="vitals")updatePreview();
   }else if(f.id==="vform"){
     const v=readVitals();if(Object.keys(v).length<2){toast("Enter at least one value");return}
@@ -444,7 +467,427 @@ document.addEventListener("submit",e=>{
   }
 });
 
+/* =====================================================================
+   PHASE 2 — alerts, medications, investigations, lines, checklist, calculators
+   All thresholds and the formulary are a STARTING SET: verify against
+   departmental protocol / IAP drug formulary before clinical use.
+   ===================================================================== */
+const today=()=>new Date().toLocaleDateString("en-CA");
+const dateOf=iso=>new Date(iso).toLocaleDateString("en-CA");
+const hrsSince=iso=>(Date.now()-new Date(iso).getTime())/36e5;
+function dtLocal(d){d=d?new Date(d):new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,16)}
+function wt(p){return p.weight||null}
+function normalize(p){
+  p.meds=p.meds||[];p.inv=p.inv||[];p.lines=p.lines||[];p.vitals=p.vitals||[];p.notes=p.notes||[];
+  p.checks=p.checks||{};p.checks.nb=p.checks.nb||{};p.checks.protocols=p.checks.protocols||{};
+  if(!p.weights)p.weights=p.weight?[{at:p.admittedAt,kg:p.weight}]:[];
+  if(p.fluidPct==null)p.fluidPct=100;
+}
+
+/* ---- formulary: per = mg/kg/dose range, max = mg/dose, dayMax = mg/kg/day, dayAbs = mg/day ---- */
+const FORM=[
+ {id:"ampicillin",name:"Ampicillin",per:[25,100],max:2000,freq:"6-hourly (neonate 8–12-hourly)",abx:1,note:"100 mg/kg/dose for meningitis"},
+ {id:"cloxacillin",name:"Cloxacillin",per:[25,50],max:2000,freq:"6-hourly",abx:1},
+ {id:"gentamicin",name:"Gentamicin",per:[4,7.5],freq:"once daily (neonate 24–48-hourly)",abx:1},
+ {id:"amikacin",name:"Amikacin",per:[15,20],max:1500,freq:"once daily",abx:1},
+ {id:"ceftriaxone",name:"Ceftriaxone",per:[50,100],max:2000,dayAbs:4000,freq:"once or twice daily",abx:1},
+ {id:"cefotaxime",name:"Cefotaxime",per:[25,75],max:2000,freq:"6–8-hourly",abx:1},
+ {id:"piptaz",name:"Piperacillin-tazobactam",per:[80,100],max:4000,freq:"6–8-hourly",abx:1,note:"dose as piperacillin"},
+ {id:"meropenem",name:"Meropenem",per:[10,40],max:2000,freq:"8-hourly",abx:1,note:"40 mg/kg/dose for meningitis"},
+ {id:"vancomycin",name:"Vancomycin",per:[10,20],freq:"6–8-hourly",abx:1,note:"monitor levels"},
+ {id:"metronidazole",name:"Metronidazole",per:[7.5,15],max:500,freq:"8-hourly",abx:1},
+ {id:"azithromycin",name:"Azithromycin",per:[5,10],max:500,freq:"once daily",abx:1},
+ {id:"acyclovir",name:"Acyclovir",per:[10,20],freq:"8-hourly",abx:1},
+ {id:"fluconazole",name:"Fluconazole",per:[6,12],max:800,freq:"once daily",abx:1},
+ {id:"paracetamol",name:"Paracetamol",per:[10,15],max:1000,dayMax:60,dayAbs:4000,freq:"6-hourly"},
+ {id:"ibuprofen",name:"Ibuprofen",per:[5,10],max:400,dayMax:40,freq:"6–8-hourly",nsaid:1},
+ {id:"ondansetron",name:"Ondansetron",per:[0.1,0.15],max:4,freq:"8-hourly"},
+ {id:"furosemide",name:"Furosemide",per:[0.5,2],max:40,freq:"12–24-hourly"},
+ {id:"prednisolone",name:"Prednisolone",per:[1,2],max:60,freq:"once daily"},
+ {id:"dexamethasone",name:"Dexamethasone",per:[0.15,0.6],max:16,freq:"as per indication"},
+ {id:"hydrocortisone",name:"Hydrocortisone",per:[1,4],max:100,freq:"6-hourly"},
+ {id:"phenobarb-load",name:"Phenobarbitone (loading)",per:[15,20],freq:"once",note:"may repeat 10 mg/kg up to 40 mg/kg total"},
+ {id:"phenobarb",name:"Phenobarbitone (maintenance)",per:[2.5,5],freq:"once daily"},
+ {id:"phenytoin-load",name:"Phenytoin (loading)",per:[15,20],max:1500,freq:"once, over 20 min"},
+ {id:"levetiracetam-load",name:"Levetiracetam (loading)",per:[20,60],max:3000,freq:"once"},
+ {id:"midazolam",name:"Midazolam (bolus)",per:[0.1,0.2],max:10,freq:"may repeat once"},
+ {id:"calcium",name:"Calcium gluconate",per:[50,100],max:2000,freq:"slow IV with ECG",note:"10% = 100 mg/mL"},
+ {id:"other",name:"Other (no automatic check)"}
+];
+const FREQ=[[1,"Once daily / once"],[2,"12-hourly"],[3,"8-hourly"],[4,"6-hourly"],[6,"4-hourly"]];
+function fx(id){return FORM.find(f=>f.id===id)}
+function r1(x){return Math.round(x*10)/10}
+function checkDose(p,m){
+  const f=fx(m.drug),w=wt(p);
+  if(!f||!f.per)return{st:"unknown",text:"No automatic check for this drug"};
+  if(!w)return{st:"noweight",text:"Enter weight to check dose"};
+  const d=Number(m.dose),pk=d/w,day=d*(m.perDay||1),probs=[];
+  if(f.max&&d>f.max)probs.push(`above max single dose ${f.max} mg`);
+  if(pk>f.per[1]*1.1)probs.push(`${r1(pk)} mg/kg/dose is above ${f.per[1]}`);
+  if(f.dayMax&&day/w>f.dayMax*1.05)probs.push(`${r1(day/w)} mg/kg/day is above ${f.dayMax}`);
+  if(f.dayAbs&&day>f.dayAbs)probs.push(`${day} mg/day is above ${f.dayAbs}`);
+  if(probs.length)return{st:"high",text:"Possible overdose: "+probs.join("; ")};
+  if(pk<f.per[0]*0.9)return{st:"low",text:`${r1(pk)} mg/kg/dose is below usual ${f.per[0]}–${f.per[1]}`};
+  return{st:"ok",text:`${r1(pk)} mg/kg/dose · usual ${f.per[0]}–${f.per[1]} mg/kg ${f.freq}`};
+}
+
+/* ---- labs with age-aware ranges and critical limits ---- */
+const LABS=[
+ {id:"na",name:"Sodium",unit:"mmol/L",lo:135,hi:145,clo:125,chi:155},
+ {id:"k",name:"Potassium",unit:"mmol/L",lo:3.5,hi:5.5,clo:2.5,chi:6.5},
+ {id:"glu",name:"Blood glucose",unit:"mg/dL",lo:70,hi:140,clo:54,chi:300,neo:{lo:45,clo:45}},
+ {id:"hb",name:"Haemoglobin",unit:"g/dL",lo:10,hi:15,clo:7,neo:{lo:14,hi:22,clo:10}},
+ {id:"plt",name:"Platelets",unit:"×10³/µL",lo:150,hi:450,clo:20},
+ {id:"tlc",name:"Total leucocyte count",unit:"×10³/µL",lo:4,hi:11,clo:1,chi:30,neo:{lo:5,hi:30}},
+ {id:"crp",name:"CRP",unit:"mg/L",hi:10},
+ {id:"hct",name:"Haematocrit",unit:"%",lo:33,hi:45,neo:{lo:42,hi:65}},
+ {id:"cr",name:"Serum creatinine",unit:"mg/dL",hi:1.0,chi:3},
+ {id:"ca",name:"Serum calcium (total)",unit:"mg/dL",lo:8.5,hi:10.5,clo:7,chi:13},
+ {id:"tsb",name:"Total serum bilirubin",unit:"mg/dL",hi:12,chi:20},
+ {id:"ph",name:"Blood gas pH",unit:"",lo:7.35,hi:7.45,clo:7.1,chi:7.6},
+ {id:"hco3",name:"Bicarbonate",unit:"mmol/L",lo:22,hi:26,clo:10},
+ {id:"bcs",name:"Blood culture",unit:"",text:1},{id:"ucs",name:"Urine culture",unit:"",text:1},
+ {id:"csf",name:"CSF analysis",unit:"",text:1},{id:"cxr",name:"Chest X-ray",unit:"",text:1},
+ {id:"ns1",name:"Dengue NS1 / IgM",unit:"",text:1},{id:"ketones",name:"Urine / blood ketones",unit:"",text:1}
+];
+function labRange(p,l){return band(p.dob)==="neo"&&l.neo?Object.assign({},l,l.neo):l}
+function flagLab(p,inv){
+  const l=LABS.find(x=>x.name===inv.test);if(!l||l.text||inv.value==null||inv.value==="")return null;
+  const r=labRange(p,l),v=Number(inv.value);
+  if((r.clo!=null&&v<r.clo)||(r.chi!=null&&v>r.chi))return"critical";
+  if((r.lo!=null&&v<r.lo)||(r.hi!=null&&v>r.hi))return v<(r.lo??-1e9)?"low":"high";
+  return"normal";
+}
+
+/* ---- fluids ---- */
+function holliday(w){return w<=10?100*w:w<=20?1000+50*(w-10):1500+20*(w-20)}
+function neoFluid(dol){return dol<=1?[60,80]:dol===2?[80,100]:dol===3?[100,120]:dol===4?[120,140]:[140,160]}
+function fluidTarget(p){
+  const w=wt(p);if(!w)return null;
+  if(band(p.dob)==="neo"){const dol=ageDays(p.dob)+1,[a,b]=neoFluid(dol),mid=(a+b)/2;return{day:mid*w*p.fluidPct/100,range:[a,b],how:`Neonate day ${dol}: ${a}–${b} mL/kg/day`}}
+  return{day:holliday(w)*p.fluidPct/100,how:"Holliday-Segar (100/50/20 mL/kg/day), maintenance only: excludes deficit replacement (DKA, dehydration)"};
+}
+
+/* ---- alert engine ---- */
+function alerts(p){
+  const A=[],add=(lv,t,act)=>A.push({lv,t,act});
+  if(p.status!=="admitted")return A;
+  const s=status(p),w=wt(p),neo=band(p.dob)==="neo",dx=(p.diagnosis||"").toLowerCase();
+  /* meds */
+  p.meds.filter(m=>m.active).forEach(m=>{
+    const f=fx(m.drug),name=m.drug==="other"?m.name:f.name,c=checkDose(p,m);
+    if(c.st==="high")add("high",`${name}: ${c.text}`,"meds");
+    if(c.st==="low")add("med",`${name}: ${c.text}`,"meds");
+    if(c.st==="noweight")add("med",`${name}: no weight recorded, dose not checked`,"meds");
+    if(f&&f.nsaid&&/dengue/.test(dx))add("high",`${name} with dengue: NSAIDs usually avoided (bleeding risk)`,"meds");
+    if((f&&f.abx)||m.abx){
+      const d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;
+      const reviewed=m.reviewedAt&&hrsSince(m.reviewedAt)<24;
+      if(d>=3&&d<=4&&!reviewed)add("med",`${name} day ${d}: 48–72 h review (cultures, de-escalate or stop?)`,"meds");
+      if(d>=7&&!reviewed)add("med",`${name} day ${d}: confirm planned duration`,"meds");
+      if(!m.stop)add("info",`${name}: no stop / review date set`,"meds");
+      else if(dateOf(m.stop)<=today())add("high",`${name}: stop date reached (${m.stop})`,"meds");
+    }
+  });
+  /* investigations */
+  p.inv.forEach(i=>{
+    if(i.status==="pending"){const h=hrsSince(i.orderedAt);if(h>=24)add(/culture/i.test(i.test)?"med":"info",`${i.test} pending ${Math.round(h)} h: chase result`,"inv")}
+    else if(!i.ack){const fl=flagLab(p,i);add(fl==="critical"?"high":"med",`${fl==="critical"?"CRITICAL ":"New "}result not acknowledged: ${i.test} ${i.value??i.result??""} ${(LABS.find(l=>l.name===i.test)||{}).unit||""}`,"inv")}
+  });
+  const anyCulture=p.inv.some(i=>/culture/i.test(i.test));
+  if(p.meds.some(m=>m.active&&((fx(m.drug)||{}).abx||m.abx))&&!anyCulture)add("med","On antibiotics but no culture ordered","inv");
+  /* lines */
+  p.lines.filter(l=>!l.removedAt).forEach(l=>{
+    const h=hrsSince(l.insertedAt),d=Math.floor(h/24)+1;
+    if(/cannula/i.test(l.type)&&h>=72)add("med",`Cannula (${l.site||"site?"}) in for ${Math.round(h)} h: resite or remove`,"lines");
+    else if(/catheter|central/i.test(l.type))add(d>=7?"med":"info",`${l.type} day ${d}: is it still needed?`,"lines");
+  });
+  /* weight, fluids, sugar */
+  const lw=p.weights[p.weights.length-1];
+  if(!lw)add("high","No weight recorded: doses and fluids cannot be checked","checks");
+  else if(dateOf(lw.at)!==today())add("info","No weight recorded today","checks");
+  if(p.fluidRate!=null&&w){const t=fluidTarget(p);if(t){const tr=t.day/24,ratio=p.fluidRate/tr;
+    if(ratio>1.2)add("high",`Fluids ${p.fluidRate} mL/h is ${Math.round(ratio*100)}% of target ${r1(tr)} mL/h`,"calc");
+    else if(ratio<0.8)add("med",`Fluids ${p.fluidRate} mL/h is only ${Math.round(ratio*100)}% of target ${r1(tr)} mL/h`,"calc")}}
+  if(p.checks.ioDate!==today())add("info","Intake / output not charted today","checks");
+  if(s.level==="red"||s.level==="orange"){const sg=p.vitals.slice().reverse().find(v=>v.sugar!=null);if(!sg||hrsSince(sg.at)>6)add("high","Sick child with no blood sugar in the last 6 h","vitals")}
+  /* protocols & newborn care */
+  const prot=p.checks.protocols;
+  if(/sepsis/.test(dx)&&!prot.sepsis)add("high","Sepsis diagnosed: sepsis bundle not marked as started","checks");
+  if(/dka|ketoacidosis/.test(dx)&&!prot.dka)add("high","DKA diagnosed: DKA protocol not marked as started","checks");
+  if(/\bsam\b|severe acute malnutrition/.test(dx)&&!prot.sam)add("high","SAM diagnosed: WHO 10-step protocol not marked as started","checks");
+  if(neo){const nb=p.checks.nb,miss=[["vitk","Vitamin K"],["bcg","BCG"],["opv","OPV-0"],["hepb","Hep B-0"]].filter(x=>!nb[x[0]]).map(x=>x[1]);if(miss.length)add("med","Newborn: "+miss.join(", ")+" not documented","checks")}
+  if(!p.checks.nutrition)add("med","No feeding / nutrition plan documented","checks");
+  if(!p.checks.consent)add("med","Consent not documented","checks");
+  if(p.checks.referral&&!p.checks.referralDone)add("med","Referral pending: "+p.checks.referral,"checks");
+  if(!p.checks.counselledAt||dateOf(p.checks.counselledAt)!==today())add("info","Parents not counselled today","checks");
+  const order={high:0,med:1,info:2};A.sort((a,b)=>order[a.lv]-order[b.lv]);
+  return A;
+}
+function alertBadge(p){const a=alerts(p),h=a.filter(x=>x.lv==="high").length,m=a.filter(x=>x.lv==="med").length;if(!h&&!m)return"";return`<span class="abadge">${h?`<b class="ah">${h} urgent</b>`:""}${m?`<b class="am">${m} to check</b>`:""}</span>`}
+function alertsPanel(p){
+  const a=alerts(p);if(!a.length)return`<h3>Checklist alerts</h3><div class="panel muted">Nothing outstanding.</div>`;
+  const lab={meds:"Medicines",inv:"Investigations",lines:"Lines",checks:"Checklist",calc:"Fluids",vitals:"Vitals"};
+  return`<h3>Checklist alerts · ${a.length}</h3><ul class="alerts">${a.map(x=>`<li class="al al-${x.lv}"><span>${esc(x.t)}</span><button class="ghost small" data-action="${x.act}" data-id="${p.id}">${lab[x.act]}</button></li>`).join("")}</ul>`;
+}
+
+/* ---- patient summaries for detail view ---- */
+function medName(m){return m.drug==="other"?m.name:fx(m.drug).name}
+function medsSummary(p){
+  const act=p.meds.filter(m=>m.active);
+  return`<h3>Medicines · ${act.length} active</h3>`+(act.length?`<div class="tablewrap"><table><thead><tr><th>Drug</th><th>Dose</th><th>Check</th><th>Day</th></tr></thead><tbody>${act.map(m=>{const c=checkDose(p,m),d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;return`<tr><td>${esc(medName(m))}</td><td class="mono">${esc(m.dose)} ${esc(m.unit||"mg")} × ${m.perDay}/d ${esc(m.route||"")}</td><td class="ck ck-${c.st}" style="text-align:left;white-space:normal">${esc(c.text)}</td><td class="mono">${d}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="panel muted">No active medicines.</div>`);
+}
+function invSummary(p){
+  const pend=p.inv.filter(i=>i.status==="pending"),res=p.inv.filter(i=>i.status!=="pending").slice(-6).reverse();
+  let h=`<h3>Investigations · ${pend.length} pending</h3>`;
+  if(!p.inv.length)return h+`<div class="panel muted">None ordered.</div>`;
+  return h+`<div class="tablewrap"><table><thead><tr><th>Test</th><th>Result</th><th>Status</th></tr></thead><tbody>${pend.map(i=>`<tr><td>${esc(i.test)}</td><td class="muted">ordered ${since(i.orderedAt)}</td><td>Pending</td></tr>`).join("")}${res.map(i=>{const fl=flagLab(p,i);return`<tr><td>${esc(i.test)}</td><td class="mono fl-${fl||"none"}">${esc(i.value??i.result??"")} ${esc((LABS.find(l=>l.name===i.test)||{}).unit||"")}${fl&&fl!=="normal"?" · "+fl:""}</td><td>${i.ack?"Seen":"<b>Not seen</b>"}</td></tr>`}).join("")}</tbody></table></div>`;
+}
+
+/* ---- views ---- */
+function back(p){return`<div class="actions" style="margin-top:12px"><button class="ghost" data-action="open" data-id="${p.id}">← ${esc(p.name)}</button></div>`}
+function medsView(p){
+  const opts=FORM.map(f=>[f.id,f.name]);
+  let h=back(p)+`<h2>Medicines · ${esc(p.name)}</h2><p class="muted">Weight ${wt(p)?wt(p)+" kg":"<b>not recorded</b>"}. Doses are checked against a starting formulary; verify with your unit protocol.</p>`;
+  h+=`<form id="mform" class="form" data-id="${p.id}">
+   <div class="full">${sel("m-drug","Drug","ampicillin",opts)}</div>
+   <div class="full" id="m-other-wrap" hidden>${field("m-name","Drug name","")}</div>
+   ${field("m-dose","Dose per administration","","number","step=\"any\" min=\"0\" inputmode=\"decimal\" required")}
+   ${sel("m-unit","Unit","mg",["mg","mcg","units","mL"])}
+   ${sel("m-freq","Frequency",4,FREQ)}
+   ${sel("m-route","Route","IV",["IV","IM","Oral","NG","Neb","SC","PR"])}
+   ${field("m-start","Started","", "datetime-local")}
+   ${field("m-stop","Planned stop / review date","","date")}
+   <label class="check full" for="m-abx" id="m-abx-wrap" hidden><input id="m-abx" type="checkbox"> Antimicrobial (count days)</label>
+   <div class="full" id="mpreview"></div>
+   <div class="full actions"><button type="submit" class="primary">Add medicine</button></div>
+  </form>`;
+  const all=p.meds.slice().reverse();
+  if(all.length){h+=`<h3>Current and past</h3><div class="list">${all.map(m=>{const c=checkDose(p,m),d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;return`<div class="panel ${m.active?"":"muted"}"><div class="row-between"><b>${esc(medName(m))}</b><span class="mono">${m.active?"Day "+d:"Stopped"}</span></div><div class="mono">${esc(m.dose)} ${esc(m.unit||"mg")} · ${FREQ.find(f=>f[0]==m.perDay)[1]} · ${esc(m.route)}${m.stop?" · stop "+esc(m.stop):""}</div>${m.active?`<div class="ck ck-${c.st}">${esc(c.text)}</div><div class="actions"><button class="small" data-action="med-review" data-id="${p.id}" data-mid="${m.id}">Mark reviewed today</button><button class="small" data-action="med-stop" data-id="${p.id}" data-mid="${m.id}">Stop</button></div>`:""}</div>`}).join("")}</div>`}
+  return h;
+}
+function invView(p){
+  let h=back(p)+`<h2>Investigations · ${esc(p.name)}</h2>`;
+  h+=`<form id="iform" class="form" data-id="${p.id}">
+   <div class="full">${sel("i-test","Test",LABS[0].name,LABS.map(l=>l.name).concat(["Other"]))}</div>
+   <div class="full" id="i-other-wrap" hidden>${field("i-other","Test name","")}</div>
+   <div class="full" id="iwarn"></div>
+   <div class="full actions"><button type="submit" class="primary">Order test</button></div>
+  </form>`;
+  const pend=p.inv.filter(i=>i.status==="pending");
+  h+=`<h3>Pending · ${pend.length}</h3>`;
+  h+=pend.length?`<div class="list">${pend.map(i=>{const l=LABS.find(x=>x.name===i.test);return`<form class="panel rform" data-id="${p.id}" data-iid="${i.id}"><div class="row-between"><b>${esc(i.test)}</b><span class="muted">ordered ${since(i.orderedAt)}</span></div><div class="form" style="margin-top:8px">${l&&!l.text?field("r-"+i.id,"Result "+(l.unit?"("+l.unit+")":""),"","number","step=\"any\" inputmode=\"decimal\""):field("r-"+i.id,"Result / report","")}<div class="actions" style="margin:0;align-items:end"><button type="submit" class="primary">Save result</button></div></div></form>`}).join("")}</div>`:`<div class="panel muted">Nothing pending.</div>`;
+  const res=p.inv.filter(i=>i.status!=="pending").slice().reverse();
+  if(res.length){h+=`<h3>Results</h3><div class="tablewrap"><table><thead><tr><th>Test</th><th>Result</th><th>When</th><th></th></tr></thead><tbody>${res.map(i=>{const fl=flagLab(p,i),l=LABS.find(x=>x.name===i.test)||{};return`<tr><td>${esc(i.test)}</td><td class="mono fl-${fl||"none"}">${esc(i.value??i.result??"")} ${esc(l.unit||"")}${fl&&fl!=="normal"?" · "+fl:""}</td><td class="mono">${when(i.resultAt)}</td><td>${i.ack?"Seen":`<button class="small" data-action="inv-ack" data-id="${p.id}" data-iid="${i.id}">Mark seen</button>`}</td></tr>`}).join("")}</tbody></table></div>`}
+  return h;
+}
+function linesView(p){
+  let h=back(p)+`<h2>Lines and tubes · ${esc(p.name)}</h2>`;
+  h+=`<form id="lform" class="form" data-id="${p.id}">
+   ${sel("l-type","Type","Peripheral cannula",["Peripheral cannula","Urinary catheter","Central line","Umbilical catheter","NG / OG tube","Endotracheal tube","Other"])}
+   ${field("l-site","Site (e.g. L hand)","")}
+   ${field("l-at","Inserted at",dtLocal(),"datetime-local")}
+   <div class="full actions"><button type="submit" class="primary">Add</button></div>
+  </form>`;
+  const act=p.lines.filter(l=>!l.removedAt),old=p.lines.filter(l=>l.removedAt);
+  h+=`<h3>In place · ${act.length}</h3>`+(act.length?`<div class="list">${act.map(l=>{const hh=hrsSince(l.insertedAt);return`<div class="panel"><div class="row-between"><b>${esc(l.type)}</b><span class="mono ${/cannula/i.test(l.type)&&hh>=72?"fl-critical":""}">${Math.round(hh)} h · day ${Math.floor(hh/24)+1}</span></div><div class="muted">${esc(l.site||"")} · inserted ${when(l.insertedAt)}</div><div class="actions"><button class="small" data-action="line-remove" data-id="${p.id}" data-lid="${l.id}">Mark removed</button></div></div>`}).join("")}</div>`:`<div class="panel muted">No lines recorded.</div>`);
+  if(old.length)h+=`<h3>Removed</h3><div class="panel muted">${old.map(l=>`${esc(l.type)} ${esc(l.site||"")} · ${when(l.insertedAt)} → ${when(l.removedAt)}`).join("<br>")}</div>`;
+  return h;
+}
+function checksView(p){
+  const c=p.checks,neo=band(p.dob)==="neo",lw=p.weights[p.weights.length-1];
+  const ck=(id,label,v)=>`<label class="check" for="${id}"><input id="${id}" type="checkbox"${v?" checked":""}> ${label}</label>`;
+  return back(p)+`<h2>Daily checklist · ${esc(p.name)}</h2>
+  <form id="cform" class="form" data-id="${p.id}">
+   <div class="full">${field("c-wt","Today's weight (kg)"+(lw?` · last ${lw.kg} kg ${since(lw.at)}`:""),"","number","step=\"0.01\" min=\"0\" inputmode=\"decimal\"")}</div>
+   <div class="full">${ck("c-io","Intake / output charted today",c.ioDate===today())}</div>
+   <div class="full">${ck("c-counsel","Parents counselled today",c.counselledAt&&dateOf(c.counselledAt)===today())}</div>
+   <div class="full">${ck("c-consent","Consent documented",c.consent)}</div>
+   <div class="full">${field("c-nutrition","Feeding / nutrition plan",c.nutrition||"","text","placeholder=\"e.g. EBM 30 mL 2-hourly via OG\"")}</div>
+   ${field("c-referral","Referral pending (department)",c.referral||"")}
+   <div style="display:flex;align-items:end">${ck("c-refdone","Referral seen",c.referralDone)}</div>
+   <h3 class="full" style="margin-bottom:0">Protocols started</h3>
+   ${ck("c-sepsis","Sepsis bundle",c.protocols.sepsis)}${ck("c-dka","DKA protocol",c.protocols.dka)}${ck("c-sam","SAM (WHO 10 steps)",c.protocols.sam)}
+   ${neo?`<h3 class="full" style="margin-bottom:0">Newborn care</h3>${ck("c-vitk","Vitamin K",c.nb.vitk)}${ck("c-bcg","BCG",c.nb.bcg)}${ck("c-opv","OPV-0",c.nb.opv)}${ck("c-hepb","Hep B-0",c.nb.hepb)}`:""}
+   <div class="full actions"><button type="submit" class="primary">Save checklist</button></div>
+  </form>`;
+}
+
+/* ---- calculators ---- */
+const INF=[
+ {id:"adrenaline",name:"Adrenaline",u:"mcg/kg/min",r:[0.05,1],dose:0.1,mix:w=>[0.6*w,100],hint:"0.6 × wt mg in 100 mL → 1 mL/h = 0.1 mcg/kg/min"},
+ {id:"noradrenaline",name:"Noradrenaline",u:"mcg/kg/min",r:[0.05,1],dose:0.1,mix:w=>[0.6*w,100],hint:"0.6 × wt mg in 100 mL → 1 mL/h = 0.1 mcg/kg/min"},
+ {id:"dopamine",name:"Dopamine",u:"mcg/kg/min",r:[5,20],dose:10,mix:w=>[6*w,100],hint:"6 × wt mg in 100 mL → 1 mL/h = 1 mcg/kg/min"},
+ {id:"dobutamine",name:"Dobutamine",u:"mcg/kg/min",r:[5,20],dose:10,mix:w=>[6*w,100],hint:"6 × wt mg in 100 mL → 1 mL/h = 1 mcg/kg/min"},
+ {id:"milrinone",name:"Milrinone",u:"mcg/kg/min",r:[0.25,0.75],dose:0.5,mix:w=>[0.6*w,100],hint:"0.6 × wt mg in 100 mL → 1 mL/h = 0.1 mcg/kg/min"},
+ {id:"midazolam",name:"Midazolam",u:"mcg/kg/min",r:[1,5],dose:2,mix:w=>[3*w,50],hint:"3 × wt mg in 50 mL → 1 mL/h = 1 mcg/kg/min"},
+ {id:"insulin",name:"Insulin (regular)",u:"units/kg/h",r:[0.05,0.1],dose:0.1,mix:()=>[50,50],hint:"50 units in 50 mL NS → 1 unit/mL"}
+];
+function infRate(f,dose,w,amt,vol){const c=amt/vol;if(!c||!w)return null;return f.u==="units/kg/h"?dose*w/c:dose*w*60/(c*1000)}
+function resusRows(w,ageY){
+  const R=[],mx=(v,m)=>m!=null&&v>m?m:v,f=v=>v<1?Math.round(v*100)/100:r1(v);
+  const ad=mx(0.01*w,1);R.push(["Adrenaline (arrest) IV/IO",`${f(ad)} mg = ${f(ad*10)} mL of 1:10,000`,"0.01 mg/kg, max 1 mg"]);
+  const am=mx(0.01*w,0.5);R.push(["Adrenaline IM (anaphylaxis)",`${f(am)} mg = ${f(am)} mL of 1:1000`,"0.01 mg/kg, max 0.5 mg"]);
+  R.push(["Fluid bolus NS / RL",`${f(10*w)}–${f(20*w)} mL`,"10–20 mL/kg; 10 mL/kg in neonates, SAM, cardiac"]);
+  R.push(["Dextrose 10%",`${f(2*w)} mL`,"2 mL/kg for hypoglycaemia"]);
+  R.push(["Atropine",`${f(mx(0.02*w,0.5))} mg`,"0.02 mg/kg, max 0.5 mg"]);
+  R.push(["Adenosine",`${f(mx(0.1*w,6))} mg, then ${f(mx(0.2*w,12))} mg`,"0.1 mg/kg (max 6), then 0.2 mg/kg (max 12)"]);
+  R.push(["Amiodarone",`${f(mx(5*w,300))} mg`,"5 mg/kg, max 300 mg"]);
+  R.push(["Calcium gluconate 10%",`${f(mx(0.5*w,20))} mL`,"0.5 mL/kg, max 20 mL, slow IV"]);
+  R.push(["Sodium bicarbonate 8.4%",`${f(w)} mL`,"1 mEq/kg; dilute 1:1 in neonates"]);
+  R.push(["Midazolam IN / buccal",`${f(mx(0.2*w,10))}–${f(mx(0.3*w,10))} mg`,"0.2–0.3 mg/kg, max 10 mg"]);
+  R.push(["3% saline",`${f(3*w)}–${f(5*w)} mL`,"3–5 mL/kg for raised ICP"]);
+  R.push(["Defibrillation",`${Math.round(4*w)} J`,"4 J/kg"]);
+  R.push(["Synchronised cardioversion",`${f(0.5*w)}–${f(w)} J, then ${f(2*w)} J`,"0.5–1 J/kg, then 2 J/kg"]);
+  if(ageY!=null&&ageY>=1){const u=ageY/4+4,c=ageY/4+3.5;R.push(["ETT size",`uncuffed ${r1(Math.round(u*2)/2)} / cuffed ${r1(Math.round(c*2)/2)} mm`,`depth ≈ ${r1(3*Math.round(u*2)/2)} cm at lip`])}
+  else{const e=w<1?2.5:w<2?3:w<3?3.5:3.5;R.push(["ETT size (neonate)",`${e} mm`,`depth ≈ ${r1(w+6)} cm at lip (weight + 6)`])}
+  return R;
+}
+let calcState={tab:"fluids",inf:"adrenaline",w:null,age:null};
+function calcView(p){
+  const w=p?wt(p):calcState.w,ageY=p?ageDays(p.dob)/365.25:calcState.age,t=calcState.tab;
+  let h=(p?back(p):`<div class="actions" style="margin-top:12px"><button class="ghost" data-action="home">← Ward list</button></div>`)+`<h2>Calculators${p?" · "+esc(p.name):""}</h2>`;
+  if(p)h+=`<p class="muted">Using recorded weight ${w?w+" kg":"(none)"} · ${ageText(p.dob)}</p>`;
+  else h+=`<div class="form">${field("k-w","Weight (kg)",calcState.w,"number","step=\"0.01\" min=\"0\" inputmode=\"decimal\"")}${field("k-age","Age (years, for ETT)",calcState.age,"number","step=\"0.1\" min=\"0\" inputmode=\"decimal\"")}</div>`;
+  h+=`<div class="tabs" role="tablist">${[["fluids","Fluids"],["infusion","Infusions"],["resus","Resus doses"],["dose","Dose check"]].map(x=>`<button role="tab" class="tab" aria-selected="${t===x[0]}" data-action="calc-tab" data-tab="${x[0]}" data-id="${p?p.id:""}">${x[1]}</button>`).join("")}</div>`;
+  if(!w)return h+`<div class="panel muted">Enter a weight to calculate.</div>`;
+  if(t==="fluids"){
+    const pct=p?p.fluidPct:(calcState.pct||100),neo=p?band(p.dob)==="neo":ageY!=null&&ageY<28/365;
+    let day,how;if(p){const ft=fluidTarget(p);day=ft.day;how=ft.how}else{day=holliday(w)*pct/100;how="Holliday-Segar (100/50/20 mL/kg/day)"}
+    h+=`<div class="panel"><div class="big mono">${Math.round(day)} mL/day · ${r1(day/24)} mL/h</div><div class="muted">${how}${pct!==100?` × ${pct}%`:""}</div>${neo?`<div class="muted">Neonatal schedule by day of life (term): D1 60–80, D2 80–100, D3 100–120, D4 120–140, D5+ 140–160 mL/kg/day.</div>`:""}</div>
+    <form id="fform" class="form" data-id="${p?p.id:""}" style="margin-top:12px">
+     ${sel("f-pct","Target (% of maintenance)",pct,[[100,"100% full maintenance"],[80,"80%"],[66,"66% (two-thirds)"],[50,"50%"]])}
+     ${p?field("f-rate","Total running now (IV + feeds) mL/h",p.fluidRate,"number","step=\"0.1\" min=\"0\" inputmode=\"decimal\""):""}
+     <div class="full actions"><button type="submit" class="primary">${p?"Save and check":"Update"}</button></div>
+    </form>`;
+    if(p&&p.fluidRate!=null){const ratio=p.fluidRate/(day/24);h+=`<div class="panel ${ratio>1.2||ratio<0.8?"warnpanel":""}" style="margin-top:10px">Running ${p.fluidRate} mL/h = <b>${Math.round(ratio*100)}%</b> of target.</div>`}
+  }else if(t==="infusion"){
+    const f=INF.find(x=>x.id===calcState.inf),[a0,v0]=f.mix(w),amt=calcState.amt??r1(a0),vol=calcState.vol??v0,dose=calcState.dose??f.dose,rate=infRate(f,dose,w,amt,vol);
+    const out=dose<f.r[0]||dose>f.r[1];
+    h+=`<form id="kinf" class="form" data-id="${p?p.id:""}">
+     <div class="full">${sel("k-inf","Drug",f.id,INF.map(x=>[x.id,x.name]))}</div>
+     ${field("k-dose","Dose ("+f.u+")",dose,"number","step=\"any\" min=\"0\" inputmode=\"decimal\"")}
+     ${field("k-amt",f.u.startsWith("units")?"Amount in syringe (units)":"Amount in syringe (mg)",amt,"number","step=\"any\" min=\"0\" inputmode=\"decimal\"")}
+     ${field("k-vol","Total volume (mL)",vol,"number","step=\"any\" min=\"0\" inputmode=\"decimal\"")}
+    </form>
+    <div class="panel" style="margin-top:12px"><div class="big mono">${rate==null?"–":r1(rate)+" mL/h"}</div><div class="muted">Standard mix for ${w} kg: ${esc(f.hint)}</div><div class="muted">Usual range ${f.r[0]}–${f.r[1]} ${f.u}</div>${out?`<div class="fl-critical"><b>Dose outside usual range</b></div>`:""}<div class="actions"><button class="small" data-action="inf-reset" data-id="${p?p.id:""}">Use standard mix</button></div></div>`;
+  }else if(t==="resus"){
+    h+=`<div class="tablewrap"><table><thead><tr><th>Drug / action</th><th>For ${w} kg</th><th>Rule</th></tr></thead><tbody>${resusRows(w,ageY).map(r=>`<tr><td style="white-space:normal">${r[0]}</td><td class="mono"><b>${r[1]}</b></td><td class="muted" style="text-align:left;white-space:normal">${r[2]}</td></tr>`).join("")}</tbody></table></div>`;
+  }else{
+    h+=`<form id="kdose" class="form"><div class="full">${sel("kd-drug","Drug",calcState.kd||"paracetamol",FORM.filter(f=>f.per).map(f=>[f.id,f.name]))}</div>${field("kd-dose","Dose (mg)",calcState.kdose||"","number","step=\"any\" min=\"0\" inputmode=\"decimal\"")}${sel("kd-freq","Frequency",calcState.kfreq||4,FREQ)}</form><div id="kdout" style="margin-top:12px"></div>`;
+  }
+  return h+`<p class="disclaimer">Calculators are aids only. Check every dose, dilution and rate independently before giving.</p>`;
+}
+function kdUpdate(){
+  const o=$("#kdout");if(!o)return;const f=fx($("#kd-drug").value),d=num($("#kd-dose").value),w=view.id?wt(get(view.id)):calcState.w;
+  calcState.kd=f.id;calcState.kdose=d;calcState.kfreq=Number($("#kd-freq").value);
+  const lo=w?r1(f.per[0]*w):null,hi=w?r1(f.per[1]*w):null;
+  if(!w){o.innerHTML="";return}
+  let h=`<div class="panel"><div>Usual for ${w} kg: <b class="mono">${lo}–${hi} mg</b> per dose${f.max?` (max ${f.max} mg)`:""} · ${esc(f.freq)}</div>${f.note?`<div class="muted">${esc(f.note)}</div>`:""}`;
+  if(d){const c=checkDose({weight:w},{drug:f.id,dose:d,perDay:calcState.kfreq});h+=`<div class="ck ck-${c.st}" style="margin-top:6px">${esc(c.text)}</div>`}
+  o.innerHTML=h+`</div>`;
+}
+function mUpdate(){
+  const f=$("#mform");if(!f)return;const p=get(f.dataset.id),drug=$("#m-drug").value,other=drug==="other";
+  $("#m-other-wrap").hidden=!other;$("#m-abx-wrap").hidden=!other;
+  const dose=num($("#m-dose").value),fm=fx(drug);let h="";
+  if(fm&&fm.per&&wt(p))h+=`<div class="muted">Usual: ${r1(fm.per[0]*wt(p))}–${r1(fm.per[1]*wt(p))} mg per dose${fm.max?` (max ${fm.max})`:""} · ${esc(fm.freq)}${fm.note?" · "+esc(fm.note):""}</div>`;
+  if(dose&&!other){const c=checkDose(p,{drug,dose,perDay:Number($("#m-freq").value)});h+=`<div class="ck ck-${c.st}">${esc(c.text)}</div>`}
+  if(fm&&fm.nsaid&&/dengue/i.test(p.diagnosis||""))h+=`<div class="ck ck-high">Patient has dengue: NSAIDs usually avoided</div>`;
+  $("#mpreview").innerHTML=h;
+}
+function iUpdate(){
+  const f=$("#iform");if(!f)return;const p=get(f.dataset.id),v=$("#i-test").value;$("#i-other-wrap").hidden=v!=="Other";
+  const name=v==="Other"?$("#i-other").value.trim():v;f.dataset.warned="";
+  const dup=p.inv.filter(i=>i.test.toLowerCase()===name.toLowerCase()&&(i.status==="pending"||hrsSince(i.orderedAt)<24));
+  $("#iwarn").innerHTML=dup.length?`<div class="ck ck-low">Already ${dup[0].status==="pending"?"pending":"done"}: ordered ${since(dup[0].orderedAt)}. Ordering again will need a second tap.</div>`:"";
+}
+
+/* ---- phase 2 events ---- */
+const P2VIEWS={meds:medsView,inv:invView,lines:linesView,checks:checksView,calc:calcView};
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-action]");if(!b)return;const a=b.dataset.action,id=b.dataset.id||null,p=id?get(id):null;
+  if(P2VIEWS[a]){view={name:a,id};if(a==="calc"){calcState.amt=calcState.vol=calcState.dose=null}render2()}
+  else if(a==="calc-tab"){calcState.tab=b.dataset.tab;render2()}
+  else if(a==="inf-reset"){calcState.amt=calcState.vol=calcState.dose=null;render2()}
+  else if(a==="med-stop"){p.meds.find(m=>m.id===b.dataset.mid).active=false;save();render2();toast("Medicine stopped")}
+  else if(a==="med-review"){p.meds.find(m=>m.id===b.dataset.mid).reviewedAt=new Date().toISOString();save();render2();toast("Marked reviewed")}
+  else if(a==="inv-ack"){p.inv.find(i=>i.id===b.dataset.iid).ack=true;save();render2();toast("Marked seen")}
+  else if(a==="line-remove"){p.lines.find(l=>l.id===b.dataset.lid).removedAt=new Date().toISOString();save();render2();toast("Marked removed")}
+});
+function render2(){if(P2VIEWS[view.name]){$("#app").innerHTML=P2VIEWS[view.name](view.id?get(view.id):null);window.scrollTo(0,0);mUpdate();iUpdate();kdUpdate()}else render()}
+document.addEventListener("input",e=>{
+  if(e.target.closest("#mform"))mUpdate();
+  if(e.target.closest("#iform"))iUpdate();
+  if(e.target.closest("#kdose"))kdUpdate();
+  if(e.target.id==="k-w"||e.target.id==="k-age"){calcState.w=num($("#k-w").value);calcState.age=num($("#k-age").value);const id=e.target.id,pos=e.target.selectionStart;calcState.amt=calcState.vol=null;render2();const el=$("#"+id);el.focus();try{el.setSelectionRange(pos,pos)}catch(_){}}
+  if(e.target.closest("#kinf")&&e.target.id!=="k-inf"){calcState.dose=num($("#k-dose").value);calcState.amt=num($("#k-amt").value);calcState.vol=num($("#k-vol").value);const id=e.target.id,pos=e.target.selectionStart;render2();const el=$("#"+id);el.focus();try{el.setSelectionRange(pos,pos)}catch(_){}}
+});
+document.addEventListener("change",e=>{
+  if(e.target.closest("#mform"))mUpdate();if(e.target.closest("#iform"))iUpdate();if(e.target.closest("#kdose"))kdUpdate();
+  if(e.target.id==="k-inf"){calcState.inf=e.target.value;calcState.amt=calcState.vol=calcState.dose=null;render2()}
+});
+document.addEventListener("submit",e=>{
+  const f=e.target,id=f.dataset.id,p=id?get(id):null;
+  if(f.id==="mform"){
+    const drug=$("#m-drug").value,dose=num($("#m-dose").value);if(!dose){toast("Enter the dose");return}
+    if(drug==="other"&&!$("#m-name").value.trim()){toast("Enter the drug name");return}
+    const st=$("#m-start").value;
+    p.meds.push({id:uid(),drug,name:$("#m-name").value.trim(),dose,unit:$("#m-unit").value,perDay:Number($("#m-freq").value),route:$("#m-route").value,start:st?new Date(st).toISOString():new Date().toISOString(),stop:$("#m-stop").value||null,abx:drug==="other"&&$("#m-abx").checked,active:true});
+    save();render2();toast("Medicine added");
+  }else if(f.id==="iform"){
+    const v=$("#i-test").value,name=v==="Other"?$("#i-other").value.trim():v;if(!name){toast("Enter the test name");return}
+    const dup=p.inv.some(i=>i.test.toLowerCase()===name.toLowerCase()&&(i.status==="pending"||hrsSince(i.orderedAt)<24));
+    if(dup&&!f.dataset.warned){f.dataset.warned="1";toast("Duplicate order. Tap Order test again to confirm");return}
+    p.inv.push({id:uid(),test:name,orderedAt:new Date().toISOString(),status:"pending"});save();render2();toast(name+" ordered");
+  }else if(f.classList.contains("rform")){
+    const i=p.inv.find(x=>x.id===f.dataset.iid),el=$("#r-"+i.id),l=LABS.find(x=>x.name===i.test);
+    if(!el.value.trim()){toast("Enter the result");return}
+    if(l&&!l.text)i.value=num(el.value);else i.result=el.value.trim();
+    i.status="resulted";i.resultAt=new Date().toISOString();i.ack=false;save();render2();
+    const fl=flagLab(p,i);toast(fl==="critical"?"CRITICAL value saved":"Result saved");
+  }else if(f.id==="lform"){
+    p.lines.push({id:uid(),type:$("#l-type").value,site:$("#l-site").value.trim(),insertedAt:new Date($("#l-at").value||Date.now()).toISOString()});save();render2();toast("Added");
+  }else if(f.id==="cform"){
+    const c=p.checks,w=num($("#c-wt").value);
+    if(w){p.weights.push({at:new Date().toISOString(),kg:w});p.weight=w}
+    c.ioDate=$("#c-io").checked?today():(c.ioDate===today()?null:c.ioDate);
+    if($("#c-counsel").checked){if(!c.counselledAt||dateOf(c.counselledAt)!==today())c.counselledAt=new Date().toISOString()}else if(c.counselledAt&&dateOf(c.counselledAt)===today())c.counselledAt=null;
+    c.consent=$("#c-consent").checked;c.nutrition=$("#c-nutrition").value.trim();c.referral=$("#c-referral").value.trim();c.referralDone=$("#c-refdone").checked;
+    c.protocols={sepsis:$("#c-sepsis").checked,dka:$("#c-dka").checked,sam:$("#c-sam").checked};
+    if($("#c-vitk"))c.nb={vitk:$("#c-vitk").checked,bcg:$("#c-bcg").checked,opv:$("#c-opv").checked,hepb:$("#c-hepb").checked};
+    save();view={name:"patient",id};render();toast("Checklist saved");
+  }else if(f.id==="fform"){
+    const pct=Number($("#f-pct").value);
+    if(p){p.fluidPct=pct;const r=$("#f-rate").value;p.fluidRate=r===""?null:num(r);save()}else calcState.pct=pct;
+    render2();toast("Fluids updated");
+  }
+});
+
+/* ---- sample phase-2 data ---- */
+function seedP2(){
+  const now=Date.now(),iso=t=>new Date(t).toISOString(),ps=S.patients;
+  ps.forEach(normalize);
+  const [nb,br,dg,ns,dka]=ps;
+  nb.meds=[{id:uid(),drug:"ampicillin",dose:120,unit:"mg",perDay:3,route:"IV",start:iso(now-2*DAY-3*36e5),stop:null,active:true},{id:uid(),drug:"gentamicin",dose:12,unit:"mg",perDay:1,route:"IV",start:iso(now-2*DAY-3*36e5),stop:null,active:true}];
+  nb.lines=[{id:uid(),type:"Peripheral cannula",site:"R foot",insertedAt:iso(now-80*36e5)}];
+  nb.inv=[{id:uid(),test:"Blood culture",orderedAt:iso(now-50*36e5),status:"pending"},{id:uid(),test:"CRP",orderedAt:iso(now-50*36e5),status:"resulted",value:46,resultAt:iso(now-40*36e5),ack:false}];
+  nb.checks={nb:{vitk:true,opv:true},protocols:{},consent:true,nutrition:"EBM 25 mL 2-hourly via OG"};nb.fluidRate=14;
+  br.meds=[{id:uid(),drug:"paracetamol",dose:105,unit:"mg",perDay:4,route:"Oral",start:iso(now-DAY),active:true}];
+  br.checks={nb:{},protocols:{},consent:true,nutrition:"NG feeds 60 mL 3-hourly",ioDate:today()};br.fluidPct=66;br.fluidRate=30;
+  br.lines=[{id:uid(),type:"Peripheral cannula",site:"L hand",insertedAt:iso(now-20*36e5)}];
+  dg.meds=[{id:uid(),drug:"paracetamol",dose:300,unit:"mg",perDay:4,route:"Oral",start:iso(now-3*DAY),active:true},{id:uid(),drug:"ibuprofen",dose:140,unit:"mg",perDay:3,route:"Oral",start:iso(now-6*36e5),active:true}];
+  dg.inv=[{id:uid(),test:"Platelets",orderedAt:iso(now-8*36e5),status:"resulted",value:18,resultAt:iso(now-5*36e5),ack:false},{id:uid(),test:"Haematocrit",orderedAt:iso(now-8*36e5),status:"resulted",value:46,resultAt:iso(now-5*36e5),ack:true},{id:uid(),test:"Dengue NS1 / IgM",orderedAt:iso(now-3*DAY),status:"resulted",result:"NS1 positive",resultAt:iso(now-2.5*DAY),ack:true}];
+  dg.checks={nb:{},protocols:{},consent:true,nutrition:"Normal diet, oral fluids as tolerated",referral:"Haematology"};
+  ns.meds=[{id:uid(),drug:"prednisolone",dose:44,unit:"mg",perDay:1,route:"Oral",start:iso(now-6*DAY),active:true}];
+  ns.checks={nb:{},protocols:{},consent:true,nutrition:"Low-salt diet",ioDate:today(),counselledAt:iso(now)};ns.weights.push({at:iso(now-2*36e5),kg:22});
+  dka.meds=[];dka.inv=[{id:uid(),test:"Potassium",orderedAt:iso(now-30*6e4),status:"pending"},{id:uid(),test:"Sodium",orderedAt:iso(now-60*6e4),status:"resulted",value:132,resultAt:iso(now-20*6e4),ack:false},{id:uid(),test:"Blood gas pH",orderedAt:iso(now-60*6e4),status:"resulted",value:7.08,resultAt:iso(now-20*6e4),ack:false}];
+  dka.checks={nb:{},protocols:{},nutrition:"Nil by mouth"};dka.lines=[{id:uid(),type:"Peripheral cannula",site:"L ACF",insertedAt:iso(now-4*36e5)},{id:uid(),type:"Peripheral cannula",site:"R hand",insertedAt:iso(now-4*36e5)}];
+}
+
 if(!load())seed();
+S.patients.forEach(normalize);
+if(!S.p2){if(S.patients.some(p=>p.sample&&!p.meds.length&&!p.inv.length)){const keep=S.patients.filter(p=>!p.sample),samp=S.patients.filter(p=>p.sample);S.patients=samp;if(samp.length===5)seedP2();S.patients=samp.concat(keep)}S.p2=1;save()}
 render();
 try{if("serviceWorker" in navigator&&/^https?:/.test(location.protocol)&&document.querySelector('link[rel="manifest"]'))navigator.serviceWorker.register("sw.js").catch(()=>{})}catch(e){}
 })();
