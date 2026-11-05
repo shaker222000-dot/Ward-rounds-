@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f4e79">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<title>Paeds Ward Rounds</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: single-column bedside tool — sticky ward header, severity-striped patient rows, detail views stacked below */
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --sunken:#e9edf1; --fg:#17202b; --muted:#5b6774; --line:#d5dce3;
+  --accent:#1f4e79; --accent-fg:#ffffff;
+  --red:#c0262d; --red-bg:#fbe7e7; --orange:#d9670b; --orange-bg:#fdeedd;
+  --yellow:#b48a00; --yellow-bg:#fbf3cf; --green:#2e7d4f; --green-bg:#e3f3e9; --none:#8592a0; --none-bg:#eef1f4;
+  --font-body:"Atkinson Hyperlegible", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-data:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10151b; --surface:#18202a; --sunken:#212b37; --fg:#e6ebf0; --muted:#9aa7b4; --line:#2c3846;
+  --accent:#7fb2e5; --accent-fg:#0d1620;
+  --red:#ff6b6b; --red-bg:#3a1c1f; --orange:#ffa14a; --orange-bg:#3a2715; --yellow:#e8c547; --yellow-bg:#352f15; --green:#5fcf8b; --green-bg:#16301f; --none:#7d8a98; --none-bg:#222b35;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10151b; --surface:#18202a; --sunken:#212b37; --fg:#e6ebf0; --muted:#9aa7b4; --line:#2c3846;
+  --accent:#7fb2e5; --accent-fg:#0d1620;
+  --red:#ff6b6b; --red-bg:#3a1c1f; --orange:#ffa14a; --orange-bg:#3a2715; --yellow:#e8c547; --yellow-bg:#352f15; --green:#5fcf8b; --green-bg:#16301f; --none:#7d8a98; --none-bg:#222b35;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+header.top .wrap{padding-block:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;min-width:0;flex:1}
+.brand b{font-size:1.05rem;letter-spacing:.01em}
+.brand span{font-size:.78rem;color:var(--muted)}
+button,.btn{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:9px 14px;min-height:42px}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700}
+button.ghost{background:transparent}
+button.danger{color:var(--red);border-color:var(--red)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.counts{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 6px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:.85rem;font-weight:700;border:1px solid transparent}
+.chip i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.lv-red{--c:var(--red);--cb:var(--red-bg)} .lv-orange{--c:var(--orange);--cb:var(--orange-bg)}
+.lv-yellow{--c:var(--yellow);--cb:var(--yellow-bg)} .lv-green{--c:var(--green);--cb:var(--green-bg)} .lv-none{--c:var(--none);--cb:var(--none-bg)}
+.chip.lv{background:var(--cb);color:var(--c)} .chip.lv i{background:var(--c)}
+.chip.filter{background:var(--surface);border-color:var(--line);color:var(--fg)}
+.chip.filter[aria-pressed="true"]{background:var(--cb);border-color:var(--c);color:var(--c)}
+.sample-note{font-size:.82rem;color:var(--muted);margin:4px 0 12px}
+.search{width:100%;margin:6px 0 12px}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-height:42px;width:100%}
+textarea{min-height:70px;resize:vertical}
+.list{display:flex;flex-direction:column;gap:10px}
+.pt{display:grid;grid-template-columns:8px 1fr auto;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;text-align:left;padding:0;width:100%}
+.pt .stripe{background:var(--c)}
+.pt .body{padding:12px 14px;min-width:0;display:flex;flex-direction:column;gap:4px}
+.pt .row1{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pt .bed{font-family:var(--font-data);font-weight:600;font-size:.9rem;background:var(--sunken);padding:1px 7px;border-radius:6px}
+.pt .name{font-weight:700;font-size:1.05rem}
+.pt .meta{font-size:.85rem;color:var(--muted)}
+.pt .dx{font-size:.92rem}
+.pt .side{padding:12px 14px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;justify-content:center}
+.score{font-family:var(--font-data);font-weight:600;font-size:1.4rem;color:var(--c);font-variant-numeric:tabular-nums;line-height:1}
+.trend{font-size:.78rem;color:var(--muted);white-space:nowrap}
+.trend.worse{color:var(--red);font-weight:700} .trend.better{color:var(--green);font-weight:700}
+.flagline{font-size:.82rem;color:var(--red);font-weight:700}
+.tag{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+h2{font-size:1.25rem;margin:18px 0 8px;text-wrap:balance}
+h3{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.banner{border-radius:var(--r);padding:14px;background:var(--cb);border:2px solid var(--c);display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.banner .lvl{color:var(--c);font-weight:700;font-size:1.1rem;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.banner ul{margin:0;padding-left:18px}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 16px}
+.kv div{min-width:0}
+.kv dt{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kv dd{margin:0;font-weight:700;overflow-wrap:anywhere}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px}
+.vbox{background:var(--sunken);border-radius:8px;padding:8px 10px;border-left:4px solid var(--c, transparent)}
+.vbox small{display:block;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.vbox b{font-family:var(--font-data);font-size:1.1rem;font-variant-numeric:tabular-nums}
+.vbox em{font-style:normal;font-size:.75rem;color:var(--muted);margin-left:4px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--sunken)}
+td:first-child,th:first-child{text-align:left}
+td.mono{font-family:var(--font-data)}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.form .full{grid-column:1/-1}
+label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted);min-width:0}
+label.check{flex-direction:row;align-items:center;gap:8px;color:var(--fg);font-size:.95rem}
+label.check input{width:22px;height:22px;min-height:0}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.preview{margin-top:12px}
+.note{background:var(--sunken);border-radius:8px;padding:10px 12px;font-size:.92rem}
+.note p{margin:3px 0} .note b{color:var(--muted);font-family:var(--font-data);margin-right:6px}
+.notes{display:flex;flex-direction:column;gap:10px}
+.muted{color:var(--muted)}
+.fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:6;box-shadow:0 4px 14px rgba(0,0,0,.25);border-radius:999px;padding:12px 20px}
+.confirm{margin-top:10px;padding:12px;border:2px solid var(--red);border-radius:var(--r);background:var(--red-bg)}
+.disclaimer{font-size:.78rem;color:var(--muted);margin-top:28px;border-top:1px solid var(--line);padding-top:12px}
+.spark{width:100%;height:60px;display:block}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:20;font-size:.9rem}
+@media (prefers-reduced-motion:no-preference){.pt{transition:transform .08s}.pt:active{transform:scale(.99)}}
+</style>
+</head><body>
+<header class="top"><div class="wrap">
+  <div class="brand"><b>Paediatrics Ward Rounds</b><span>GMC Amritsar · Guru Nanak Dev Hospital</span></div>
+  <button class="ghost" data-action="home" id="btn-home">Ward</button>
+</div></header>
+<main class="wrap" id="app"></main>
+<div class="toast" id="toast" hidden></div>
+<script>
+(function(){
+"use strict";
+const KEY="gmcasr-paeds-ward-v1";
+const DAY=864e5;
+const LV={red:{label:"Critical",rank:0},orange:{label:"Deteriorating",rank:1},yellow:{label:"Watch closely",rank:2},green:{label:"Stable",rank:3},none:{label:"No vitals yet",rank:4}};
+const UP=["green","yellow","orange","red"];
+let S={patients:[]}; let view={name:"ward"}; let filter=null; let q="";
+
+/* ---------- storage ---------- */
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function load(){try{const t=localStorage.getItem(KEY);if(t){S=JSON.parse(t);return true}}catch(e){}return false}
+function uid(){return Math.random().toString(36).slice(2,10)}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function num(v){if(v===""||v==null)return null;const n=Number(v);return isFinite(n)?n:null}
+
+/* ---------- age ---------- */
+function ageDays(dob){return Math.floor((Date.now()-new Date(dob).getTime())/DAY)}
+function ageText(dob){const d=ageDays(dob);if(d<0)return"—";if(d<28)return d+" d";const m=Math.floor(d/30.44);if(m<24)return m+" mo";const y=Math.floor(d/365.25),rm=Math.floor((d-y*365.25)/30.44);return y<6&&rm?y+" y "+rm+" mo":y+" y"}
+function band(dob){const d=ageDays(dob);if(d<28)return"neo";if(d<365)return"inf";if(d<5*365.25)return"tod";if(d<12*365.25)return"sch";return"ado"}
+/* Age-specific normal ranges (editable; verify against departmental protocol) */
+const RANGE={
+ neo:{label:"Neonate (<28 d)",hr:[100,180],rr:[30,60]},
+ inf:{label:"Infant (1–12 mo)",hr:[100,160],rr:[30,50]},
+ tod:{label:"1–4 y",hr:[90,140],rr:[24,40]},
+ sch:{label:"5–11 y",hr:[70,120],rr:[18,30]},
+ ado:{label:"12 y +",hr:[60,100],rr:[12,20]}
+};
+function minSBP(dob){const b=band(dob);if(b==="neo")return 60;if(b==="inf")return 70;const y=ageDays(dob)/365.25;return y<=10?Math.round(70+2*y):90}
+function dev(v,r){if(v==null)return null;if(v>=r[0]&&v<=r[1])return 0;const d=v>r[1]?(v-r[1])/r[1]:(r[0]-v)/r[0];return d<=.15?1:d<=.3?2:3}
+
+/* ---------- PEWS ---------- */
+function assess(p,v){
+  const b=band(p.dob),R=RANGE[b],parts=[],red=[],warn=[];
+  if(!v)return{level:"none",score:null,parts,red,warn};
+  const add=(name,val,pts,why)=>{if(pts!=null)parts.push({name,val,pts,why})};
+  add("Heart rate",v.hr,dev(v.hr,R.hr),"normal "+R.hr.join("–"));
+  add("Resp. rate",v.rr,dev(v.rr,R.rr),"normal "+R.rr.join("–"));
+  if(v.spo2!=null)add("SpO₂",v.spo2+"%",v.spo2>=95?0:v.spo2>=92?1:v.spo2>=90?2:3,"");
+  if(v.o2)add("On oxygen","yes",v.o2==="high"?2:1,v.o2==="high"?"high-flow / NIV":"low-flow");
+  if(v.wob)add("Work of breathing",v.wob,{none:0,mild:1,moderate:2,severe:3}[v.wob],"");
+  if(v.crt!=null)add("CRT",v.crt+" s",v.crt<=2?0:v.crt<=3?1:3,"");
+  if(v.avpu)add("AVPU",v.avpu,{A:0,V:1,P:2,U:3}[v.avpu],"");
+  if(v.temp!=null){let t=0;if(b==="neo"){t=v.temp<35?3:v.temp<36.5?2:v.temp>38?1:0}else{t=v.temp<35?2:v.temp<36?1:v.temp>39.5?2:v.temp>38?1:0}add("Temp",v.temp+" °C",t,"")}
+  const score=parts.reduce((a,x)=>a+x.pts,0);
+  /* danger-sign overrides */
+  if(v.spo2!=null&&v.spo2<90)red.push("SpO₂ below 90%");
+  if(v.sbp!=null&&v.sbp<minSBP(p.dob))red.push("Hypotension: SBP "+v.sbp+" (min "+minSBP(p.dob)+" for age)");
+  if(v.crt!=null&&v.crt>3)red.push("CRT over 3 s: assess for shock");
+  if(v.seizure)red.push("Convulsion");
+  if(v.apnoea)red.push("Apnoea");
+  if(v.gcs!=null&&v.gcs<=8)red.push("GCS "+v.gcs+": protect airway");
+  if(v.avpu==="P"||v.avpu==="U")red.push("Responds only to pain / unresponsive");
+  const hypo=b==="neo"?45:54;
+  if(v.sugar!=null&&v.sugar<hypo)red.push("Hypoglycaemia: "+v.sugar+" mg/dL");
+  if(v.sugar!=null&&v.sugar>300)warn.push("Blood sugar "+v.sugar+" mg/dL: check ketones");
+  if(v.uo!=null&&v.uo<(b==="neo"?1:0.5))warn.push("Urine output "+v.uo+" mL/kg/h: low");
+  if(b==="neo"&&v.temp!=null&&v.temp<36.5)warn.push("Neonatal hypothermia risk");
+  let level=score>=7?"red":score>=5?"orange":score>=3?"yellow":"green";
+  if(parts.some(x=>x.pts===3)&&UP.indexOf(level)<2)level="orange";
+  if(warn.length&&level==="green")level="yellow";
+  if(red.length)level="red";
+  return{level,score,parts,red,warn};
+}
+function latest(p,i){return p.vitals.length>i?p.vitals[p.vitals.length-1-i]:null}
+function status(p){
+  const a=assess(p,latest(p,0)),prev=latest(p,1);
+  let trend=null;if(prev&&a.score!=null){const ps=assess(p,prev).score;trend=a.score>ps?"worse":a.score<ps?"better":"same"}
+  let level=a.level;
+  if(p.override&&p.override.level)level=p.override.level;
+  return{...a,computed:a.level,level,trend};
+}
+
+/* ---------- samples ---------- */
+function seed(){
+  const now=Date.now(),iso=t=>new Date(t).toISOString();
+  const dob=d=>new Date(now-d*DAY).toISOString().slice(0,10);
+  const P=(o)=>Object.assign({id:uid(),sample:true,status:"admitted",vitals:[],notes:[],override:null,unit:"Unit 1",consultant:"Dr. A (sample)",scheme:"",referredFrom:"",transport:""},o);
+  S.patients=[
+   P({name:"Baby of Harpreet",dob:dob(6),sex:"M",ipd:"S-1021",bed:"NICU 3",admittedAt:iso(now-2*DAY),diagnosis:"Late-onset neonatal sepsis",weight:2.4,gaWeeks:36,birthWeight:2.5,referredFrom:"CH Tarn Taran",transport:"108 ambulance",scheme:"JSSK",
+     vitals:[{at:iso(now-10*36e5),hr:168,rr:58,spo2:94,o2:"low",wob:"mild",crt:2,avpu:"A",temp:37.6,sugar:62},{at:iso(now-1*36e5),hr:192,rr:72,spo2:89,o2:"low",wob:"moderate",crt:4,avpu:"V",temp:35.8,sugar:40,apnoea:true}]}),
+   P({name:"Gurnoor",dob:dob(240),sex:"F",ipd:"S-1034",bed:"14A",admittedAt:iso(now-1*DAY),diagnosis:"Bronchiolitis",weight:7.1,referredFrom:"PHC Majitha",scheme:"Ayushman Bharat / MMSBY",
+     vitals:[{at:iso(now-14*36e5),hr:150,rr:52,spo2:93,o2:"low",wob:"mild",crt:2,avpu:"A",temp:38.2},{at:iso(now-2*36e5),hr:172,rr:64,spo2:92,o2:"low",wob:"moderate",crt:2,avpu:"A",temp:38.4}]}),
+   P({name:"Arjun",dob:dob(3*365+90),sex:"M",ipd:"S-1040",bed:"14B",admittedAt:iso(now-3*DAY),diagnosis:"Dengue with warning signs",weight:14,
+     vitals:[{at:iso(now-20*36e5),hr:138,rr:30,spo2:98,crt:2,avpu:"A",temp:38.6,sbp:88},{at:iso(now-3*36e5),hr:142,rr:32,spo2:97,crt:2,avpu:"A",temp:37.4,sbp:86}]}),
+   P({name:"Simran",dob:dob(7*365),sex:"F",ipd:"S-0988",bed:"9",admittedAt:iso(now-6*DAY),diagnosis:"Nephrotic syndrome, relapse",weight:22,
+     vitals:[{at:iso(now-26*36e5),hr:104,rr:24,spo2:99,crt:2,avpu:"A",temp:37,sbp:102},{at:iso(now-4*36e5),hr:96,rr:22,spo2:99,crt:1,avpu:"A",temp:36.8,sbp:104,uo:1.2}]}),
+   P({name:"Karanveer",dob:dob(11*365),sex:"M",ipd:"S-1047",bed:"2",admittedAt:iso(now-5*36e5),diagnosis:"Diabetic ketoacidosis (new onset)",weight:30,referredFrom:"DH Gurdaspur",transport:"Private",
+     vitals:[{at:iso(now-1*36e5),hr:132,rr:34,spo2:98,wob:"mild",crt:3,avpu:"V",temp:37.2,sbp:96,sugar:412,gcs:13}]})
+  ];
+  S.patients[1].notes=[{at:new Date(now-14*36e5).toISOString(),s:"Feeding less since morning",o:"Subcostal retractions, bilateral crepts",a:"Bronchiolitis, day 3 of illness",p:"O₂ to keep SpO₂ ≥ 92%, NG feeds, nasal suction"}];
+  save();
+}
+
+/* ---------- rendering ---------- */
+const $=s=>document.querySelector(s);
+function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2200)}
+function dayOf(p){return Math.floor((Date.now()-new Date(p.admittedAt).getTime())/DAY)+1}
+function when(iso){const d=new Date(iso);return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short"})+" "+d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:false})}
+function since(iso){const h=(Date.now()-new Date(iso).getTime())/36e5;return h<1?Math.max(1,Math.round(h*60))+" min ago":h<48?Math.round(h)+" h ago":Math.round(h/24)+" d ago"}
+function trendText(t){return t==="worse"?"▲ worse":t==="better"?"▼ better":t==="same"?"= same":""}
+function render(){
+  const app=$("#app");
+  if(view.name==="ward")app.innerHTML=wardView();
+  else if(view.name==="patient")app.innerHTML=patientView(get(view.id));
+  else if(view.name==="edit")app.innerHTML=editView(view.id?get(view.id):null);
+  else if(view.name==="vitals")app.innerHTML=vitalsView(get(view.id));
+  else if(view.name==="note")app.innerHTML=noteView(get(view.id));
+  else if(view.name==="override")app.innerHTML=overrideView(get(view.id));
+  window.scrollTo(0,0);
+}
+function get(id){return S.patients.find(p=>p.id===id)}
+
+function wardView(){
+  const adm=S.patients.filter(p=>p.status==="admitted").map(p=>({p,s:status(p)}));
+  adm.sort((a,b)=>LV[a.s.level].rank-LV[b.s.level].rank||(b.s.score||0)-(a.s.score||0));
+  const counts={red:0,orange:0,yellow:0,green:0,none:0};adm.forEach(x=>counts[x.s.level]++);
+  const ql=q.trim().toLowerCase();
+  const shown=adm.filter(x=>(!filter||x.s.level===filter)&&(!ql||[x.p.name,x.p.bed,x.p.ipd,x.p.diagnosis].join(" ").toLowerCase().includes(ql)));
+  const anySample=S.patients.some(p=>p.sample);
+  let h=`<div class="counts" role="group" aria-label="Filter by severity">`;
+  ["red","orange","yellow","green","none"].forEach(l=>{if(l==="none"&&!counts.none)return;h+=`<button class="chip filter lv-${l}" data-action="filter" data-lv="${l}" aria-pressed="${filter===l}"><i style="background:var(--c)"></i>${LV[l].label} ${counts[l]}</button>`});
+  h+=`</div>`;
+  h+=`<p class="sample-note">${adm.length} admitted · sorted sickest first${anySample?` · <b>Sample patients shown</b>, not real data`:``}</p>`;
+  h+=`<input class="search" id="search" type="search" placeholder="Search name, bed, IPD no., diagnosis" value="${esc(q)}">`;
+  h+=`<div class="list">`;
+  if(!shown.length)h+=`<div class="panel muted">No patients match. Tap <b>Admit patient</b> to add one.</div>`;
+  shown.forEach(({p,s})=>{
+    const lv=latest(p,0);
+    h+=`<button class="pt lv-${s.level}" data-action="open" data-id="${p.id}">
+      <span class="stripe"></span>
+      <span class="body">
+        <span class="row1"><span class="bed">${esc(p.bed||"—")}</span><span class="name">${esc(p.name)}</span>${p.sample?`<span class="tag">sample</span>`:""}</span>
+        <span class="meta">${ageText(p.dob)} · ${esc(p.sex)} · ${p.weight?esc(p.weight)+" kg · ":""}Day ${dayOf(p)} · ${esc(p.ipd||"")}</span>
+        <span class="dx">${esc(p.diagnosis||"Diagnosis not entered")}</span>
+        ${s.red.length?`<span class="flagline">⚠ ${esc(s.red[0])}${s.red.length>1?` +${s.red.length-1} more`:""}</span>`:""}
+        ${p.override?`<span class="meta">Colour set manually: ${esc(p.override.reason)}</span>`:""}
+      </span>
+      <span class="side"><span class="score">${s.score==null?"–":s.score}</span><span class="trend ${s.trend||""}">${trendText(s.trend)}</span><span class="trend">${lv?since(lv.at):"no vitals"}</span></span>
+    </button>`});
+  h+=`</div>`;
+  const dc=S.patients.filter(p=>p.status==="discharged");
+  if(dc.length){h+=`<h3>Discharged (${dc.length})</h3><div class="list">`+dc.map(p=>`<button class="pt lv-none" data-action="open" data-id="${p.id}"><span class="stripe"></span><span class="body"><span class="row1"><span class="name">${esc(p.name)}</span></span><span class="meta">${esc(p.diagnosis)}</span></span><span class="side"></span></button>`).join("")+`</div>`}
+  h+=`<div class="actions">${anySample?`<button class="ghost" data-action="clear-samples">Remove sample patients</button>`:`<button class="ghost" data-action="load-samples">Load sample patients</button>`}</div>`;
+  h+=disclaimer();
+  h+=`<button class="primary fab" data-action="new">+ Admit patient</button>`;
+  return h;
+}
+function disclaimer(){return`<p class="disclaimer">Decision support only. Scores and colours are for clinician review; the treating doctor decides. Normal ranges and PEWS thresholds are a starting set and must be checked against departmental protocol. Data is stored only on this device. Phase 1 prototype.</p>`}
+
+function vbox(name,val,unit,pts){const c=pts==null?"":pts>=3?"var(--red)":pts===2?"var(--orange)":pts===1?"var(--yellow)":"var(--green)";return`<div class="vbox" style="--c:${c}"><small>${name}</small><b>${val==null||val===""?"–":esc(val)}</b><em>${unit||""}</em></div>`}
+function patientView(p){
+  if(!p){view={name:"ward"};return wardView()}
+  const s=status(p),v=latest(p,0),R=RANGE[band(p.dob)];
+  const pt=n=>{const x=s.parts.find(z=>z.name===n);return x?x.pts:null};
+  let h=`<div class="actions" style="margin-top:12px"><button class="ghost" data-action="home">← Ward list</button></div>`;
+  h+=`<h2>${esc(p.name)} ${p.sample?`<span class="tag">sample</span>`:""}</h2>`;
+  h+=`<div class="muted">Bed ${esc(p.bed||"—")} · ${ageText(p.dob)} · ${esc(p.sex)} · Day ${dayOf(p)} of admission${p.status==="discharged"?" · <b>Discharged</b>":""}</div>`;
+  h+=`<div class="banner lv-${s.level}"><div class="lvl"><span>● ${LV[s.level].label}</span><span class="score">PEWS ${s.score==null?"–":s.score}</span></div>`;
+  if(p.override)h+=`<div>Colour set manually to <b>${LV[p.override.level].label}</b> (calculated: ${LV[s.computed].label}). Reason: ${esc(p.override.reason)} · ${when(p.override.at)}</div>`;
+  if(s.trend)h+=`<div class="trend ${s.trend}">Trend since last vitals: ${trendText(s.trend)}</div>`;
+  if(s.red.length)h+=`<div><b>Danger signs</b><ul>${s.red.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
+  if(s.warn.length)h+=`<div><b>Also check</b><ul>${s.warn.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
+  h+=`</div>`;
+  h+=`<div class="actions"><button class="primary" data-action="vitals" data-id="${p.id}">Add vitals</button><button data-action="note" data-id="${p.id}">Progress note</button><button data-action="override" data-id="${p.id}">Set colour</button></div>`;
+  h+=`<h3>Latest vitals ${v?"· "+when(v.at):""}</h3>`;
+  if(v){h+=`<div class="vgrid">${vbox("HR",v.hr,"/min",pt("Heart rate"))}${vbox("RR",v.rr,"/min",pt("Resp. rate"))}${vbox("SpO₂",v.spo2,"%",pt("SpO₂"))}${vbox("Temp",v.temp,"°C",pt("Temp"))}${vbox("CRT",v.crt,"s",pt("CRT"))}${vbox("SBP",v.sbp,"mmHg",v.sbp!=null&&v.sbp<minSBP(p.dob)?3:null)}${vbox("AVPU",v.avpu,"",pt("AVPU"))}${vbox("GCS",v.gcs,"/15",v.gcs!=null&&v.gcs<=8?3:null)}${vbox("Sugar",v.sugar,"mg/dL",null)}${vbox("Urine",v.uo,"mL/kg/h",null)}${vbox("O₂",v.o2?(v.o2==="high"?"High-flow":"Low-flow"):"Air","",pt("On oxygen"))}${vbox("Breathing",v.wob||"–","",pt("Work of breathing"))}</div>`;
+    h+=`<p class="muted" style="font-size:.82rem">Ranges used: ${R.label} · HR ${R.hr.join("–")} · RR ${R.rr.join("–")} · min SBP ${minSBP(p.dob)}</p>`;
+    h+=`<h3>Score breakdown</h3><div class="tablewrap"><table><thead><tr><th>Parameter</th><th>Value</th><th>Points</th></tr></thead><tbody>${s.parts.map(x=>`<tr><td>${x.name}${x.why?` <span class="muted">(${x.why})</span>`:""}</td><td class="mono">${esc(x.val)}</td><td class="mono">${x.pts}</td></tr>`).join("")}<tr><td><b>Total</b></td><td></td><td class="mono"><b>${s.score}</b></td></tr></tbody></table></div>`;
+  }else h+=`<div class="panel muted">No vitals recorded yet.</div>`;
+  if(p.vitals.length>1){h+=`<h3>Score trend</h3><div class="panel">${spark(p)}</div>`}
+  if(p.vitals.length){h+=`<h3>Vitals log</h3><div class="tablewrap"><table><thead><tr><th>Time</th><th>PEWS</th><th>HR</th><th>RR</th><th>SpO₂</th><th>T</th><th>CRT</th><th>SBP</th><th>AVPU</th><th>Sugar</th></tr></thead><tbody>${p.vitals.slice().reverse().map(x=>{const a=assess(p,x);return`<tr class="lv-${a.level}"><td class="mono">${when(x.at)}</td><td class="mono" style="color:var(--c);font-weight:600">${a.score}</td><td class="mono">${x.hr??"–"}</td><td class="mono">${x.rr??"–"}</td><td class="mono">${x.spo2??"–"}</td><td class="mono">${x.temp??"–"}</td><td class="mono">${x.crt??"–"}</td><td class="mono">${x.sbp??"–"}</td><td class="mono">${x.avpu||"–"}</td><td class="mono">${x.sugar??"–"}</td></tr>`}).join("")}</tbody></table></div>`}
+  h+=`<h3>Progress notes</h3>`;
+  h+=p.notes.length?`<div class="notes">${p.notes.slice().reverse().map(n=>noteBlock(n)).join("")}</div>`:`<div class="panel muted">No notes yet.</div>`;
+  h+=`<h3>Details</h3><div class="panel"><dl class="kv">
+    ${kv("IPD / CR no.",p.ipd)}${kv("Date of birth",p.dob)}${kv("Weight",p.weight?p.weight+" kg":"")}${kv("Unit",p.unit)}${kv("Consultant",p.consultant)}${kv("Admitted",when(p.admittedAt))}
+    ${kv("Diagnosis",p.diagnosis)}${kv("Referred from",p.referredFrom)}${kv("Transport",p.transport)}${kv("Scheme",p.scheme)}
+    ${band(p.dob)==="neo"||p.gaWeeks?kv("Gestation",p.gaWeeks?p.gaWeeks+" wk":"")+kv("Birth weight",p.birthWeight?p.birthWeight+" kg":""):""}
+  </dl></div>`;
+  h+=`<div class="actions"><button data-action="edit" data-id="${p.id}">Edit details</button>${p.status==="admitted"?`<button data-action="discharge" data-id="${p.id}">Mark discharged</button>`:`<button data-action="readmit" data-id="${p.id}">Move back to ward</button>`}<button class="danger" data-action="ask-delete" data-id="${p.id}">Delete record</button></div>`;
+  h+=`<div id="confirm-slot"></div>`+disclaimer();
+  return h;
+}
+function kv(k,v){return v?`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`:""}
+function noteBlock(n){return`<div class="note"><div class="muted" style="font-size:.8rem">${when(n.at)}</div>${n.s?`<p><b>S</b>${esc(n.s)}</p>`:""}${n.o?`<p><b>O</b>${esc(n.o)}</p>`:""}${n.a?`<p><b>A</b>${esc(n.a)}</p>`:""}${n.p?`<p><b>P</b>${esc(n.p)}</p>`:""}</div>`}
+function spark(p){
+  const pts=p.vitals.map(x=>assess(p,x).score),W=300,H=60,max=Math.max(8,...pts),n=pts.length;
+  const X=i=>8+i*(W-16)/(n-1),Y=s=>H-6-s*(H-12)/max;
+  const line=pts.map((s,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(s).toFixed(1)).join(" ");
+  const ref=[3,5,7].map(t=>`<line x1="0" x2="${W}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="${W-2}" y="${Y(t)-2}" font-size="9" text-anchor="end" fill="var(--muted)">${t}</text>`).join("");
+  const last=pts[n-1],lc=assess(p,latest(p,0)).level;
+  return`<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="PEWS trend">${ref}<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/>${pts.map((s,i)=>`<circle cx="${X(i)}" cy="${Y(s)}" r="${i===n-1?4:2.5}" fill="${i===n-1?`var(--${lc})`:"var(--accent)"}"/>`).join("")}</svg><div class="muted" style="font-size:.8rem">PEWS over the last ${n} entries · latest ${last} · dashed lines mark yellow 3, orange 5, red 7</div>`;
+}
+
+function field(id,label,val,type,extra){return`<label for="${id}">${label}<input id="${id}" name="${id}" type="${type||"text"}" value="${esc(val??"")}" ${extra||""}></label>`}
+function sel(id,label,val,opts){return`<label for="${id}">${label}<select id="${id}" name="${id}">${opts.map(o=>{const[v,t]=Array.isArray(o)?o:[o,o];return`<option value="${esc(v)}"${String(val??"")===String(v)?" selected":""}>${esc(t)}</option>`}).join("")}</select></label>`}
+function editView(p){
+  const e=p||{};const isNew=!p;
+  const today=new Date();const local=new Date(today.getTime()-today.getTimezoneOffset()*6e4).toISOString().slice(0,16);
+  return`<div class="actions" style="margin-top:12px"><button class="ghost" data-action="${isNew?"home":"open"}" data-id="${e.id||""}">← Back</button></div>
+  <h2>${isNew?"Admit patient":"Edit details"}</h2>
+  <form id="pform" class="form" data-id="${e.id||""}">
+   <div class="full">${field("f-name","Name *",e.name,"text","required autocomplete=\"off\"")}</div>
+   ${field("f-dob","Date of birth *",e.dob,"date","required")}
+   ${sel("f-sex","Sex",e.sex||"M",[["M","Male"],["F","Female"],["Amb","Ambiguous"]])}
+   ${field("f-ipd","IPD / CR no.",e.ipd)}
+   ${field("f-bed","Bed (e.g. 12A)",e.bed)}
+   ${field("f-unit","Unit",e.unit||"Unit 1")}
+   ${field("f-consultant","Admitting consultant",e.consultant)}
+   ${field("f-admitted","Admitted at",e.admittedAt?new Date(new Date(e.admittedAt).getTime()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16):local,"datetime-local")}
+   ${field("f-weight","Weight (kg)",e.weight,"number","step=\"0.01\" min=\"0\" inputmode=\"decimal\"")}
+   <div class="full">${field("f-dx","Provisional diagnosis",e.diagnosis)}</div>
+   ${field("f-ga","Gestation (weeks) — neonates",e.gaWeeks,"number","step=\"0.1\" inputmode=\"decimal\"")}
+   ${field("f-bw","Birth weight (kg) — neonates",e.birthWeight,"number","step=\"0.01\" inputmode=\"decimal\"")}
+   ${field("f-ref","Referred from (hospital / district)",e.referredFrom)}
+   ${sel("f-transport","Transport",e.transport||"",[["","—"],"108 ambulance","Private ambulance","Private","Walk-in"])}
+   ${sel("f-scheme","Health scheme",e.scheme||"",[["","None / not checked"],"Ayushman Bharat / MMSBY","JSSK","Other"])}
+   <div class="full actions"><button type="submit" class="primary">${isNew?"Admit":"Save changes"}</button></div>
+  </form>`;
+}
+function vitalsView(p){
+  return`<div class="actions" style="margin-top:12px"><button class="ghost" data-action="open" data-id="${p.id}">← ${esc(p.name)}</button></div>
+  <h2>Vitals · ${esc(p.name)}</h2><p class="muted">${ageText(p.dob)} · ranges for ${RANGE[band(p.dob)].label}: HR ${RANGE[band(p.dob)].hr.join("–")}, RR ${RANGE[band(p.dob)].rr.join("–")}. Leave blank anything not measured.</p>
+  <form id="vform" class="form" data-id="${p.id}">
+   ${field("v-hr","Heart rate /min","","number","inputmode=\"numeric\"")}
+   ${field("v-rr","Resp. rate /min","","number","inputmode=\"numeric\"")}
+   ${field("v-spo2","SpO₂ %","","number","inputmode=\"numeric\" min=\"0\" max=\"100\"")}
+   ${sel("v-o2","Oxygen",'',[["","Room air"],["low","Low-flow O₂"],["high","High-flow / NIV"]])}
+   ${sel("v-wob","Work of breathing","",[["","Not assessed"],["none","None"],["mild","Mild"],["moderate","Moderate"],["severe","Severe / grunting"]])}
+   ${field("v-temp","Temp °C","","number","step=\"0.1\" inputmode=\"decimal\"")}
+   ${field("v-crt","CRT (s)","","number","step=\"0.5\" inputmode=\"decimal\"")}
+   ${field("v-sbp","Systolic BP","","number","inputmode=\"numeric\"")}
+   ${sel("v-avpu","AVPU","",[["","Not assessed"],["A","Alert"],["V","Voice"],["P","Pain"],["U","Unresponsive"]])}
+   ${field("v-gcs","GCS","","number","min=\"3\" max=\"15\" inputmode=\"numeric\"")}
+   ${field("v-sugar","Blood sugar mg/dL","","number","inputmode=\"numeric\"")}
+   ${field("v-uo","Urine mL/kg/h","","number","step=\"0.1\" inputmode=\"decimal\"")}
+   <label class="check" for="v-seizure"><input id="v-seizure" type="checkbox"> Convulsion</label>
+   <label class="check" for="v-apnoea"><input id="v-apnoea" type="checkbox"> Apnoea</label>
+   <div class="full preview" id="vpreview"></div>
+   <div class="full actions"><button type="submit" class="primary">Save vitals</button></div>
+  </form>`;
+}
+function readVitals(){
+  const g=id=>num($("#"+id).value),s=id=>$("#"+id).value||null;
+  const v={at:new Date().toISOString(),hr:g("v-hr"),rr:g("v-rr"),spo2:g("v-spo2"),o2:s("v-o2"),wob:s("v-wob"),temp:g("v-temp"),crt:g("v-crt"),sbp:g("v-sbp"),avpu:s("v-avpu"),gcs:g("v-gcs"),sugar:g("v-sugar"),uo:g("v-uo"),seizure:$("#v-seizure").checked,apnoea:$("#v-apnoea").checked};
+  Object.keys(v).forEach(k=>{if(v[k]===null||v[k]===false)delete v[k]});return v;
+}
+function updatePreview(){
+  const f=$("#vform");if(!f)return;const p=get(f.dataset.id),v=readVitals(),a=assess(p,v);
+  const has=Object.keys(v).length>1;
+  $("#vpreview").innerHTML=has?`<div class="banner lv-${a.level}" style="margin:0"><div class="lvl"><span>● ${LV[a.level].label}</span><span class="score">PEWS ${a.score}</span></div>${a.red.length?`<ul>${a.red.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}${a.warn.length?`<ul>${a.warn.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>`:`<div class="muted">The score appears here as you type.</div>`;
+}
+function noteView(p){
+  const last=p.notes[p.notes.length-1];
+  return`<div class="actions" style="margin-top:12px"><button class="ghost" data-action="open" data-id="${p.id}">← ${esc(p.name)}</button></div>
+  <h2>Progress note · Day ${dayOf(p)}</h2>
+  ${last?`<h3>Previous note</h3>${noteBlock(last)}`:""}
+  <h3>Today</h3>
+  <form id="nform" class="form" data-id="${p.id}">
+   <label class="full" for="n-s">Subjective<textarea id="n-s"></textarea></label>
+   <label class="full" for="n-o">Objective<textarea id="n-o"></textarea></label>
+   <label class="full" for="n-a">Assessment<textarea id="n-a"></textarea></label>
+   <label class="full" for="n-p">Plan<textarea id="n-p"></textarea></label>
+   <div class="full actions"><button type="submit" class="primary">Save note</button></div>
+  </form>`;
+}
+function overrideView(p){
+  const s=status(p);
+  return`<div class="actions" style="margin-top:12px"><button class="ghost" data-action="open" data-id="${p.id}">← ${esc(p.name)}</button></div>
+  <h2>Set colour manually</h2><p>Calculated level: <b>${LV[s.computed].label}</b>. A reason is required either way, and it is shown on the ward list.</p>
+  <form id="oform" class="form" data-id="${p.id}">
+   ${sel("o-level","Colour",p.override?p.override.level:s.computed==="none"?"green":s.computed,UP.slice().reverse().map(l=>[l,LV[l].label]))}
+   <label class="full" for="o-reason">Reason *<input id="o-reason" required value="${esc(p.override?p.override.reason:"")}" placeholder="e.g. clinically worse than score suggests"></label>
+   <div class="full actions"><button type="submit" class="primary">Apply</button>${p.override?`<button type="button" data-action="clear-override" data-id="${p.id}">Use calculated colour</button>`:""}</div>
+  </form>`;
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-action]");if(!b)return;
+  const a=b.dataset.action,id=b.dataset.id;
+  if(a==="home"){view={name:"ward"};render()}
+  else if(a==="open"){view={name:"patient",id};render()}
+  else if(a==="new"){view={name:"edit"};render()}
+  else if(a==="edit"){view={name:"edit",id};render()}
+  else if(a==="vitals"){view={name:"vitals",id};render();updatePreview()}
+  else if(a==="note"){view={name:"note",id};render()}
+  else if(a==="override"){view={name:"override",id};render()}
+  else if(a==="filter"){filter=filter===b.dataset.lv?null:b.dataset.lv;render()}
+  else if(a==="clear-override"){get(id).override=null;save();view={name:"patient",id};render();toast("Using calculated colour")}
+  else if(a==="discharge"){get(id).status="discharged";save();render();toast("Marked discharged")}
+  else if(a==="readmit"){get(id).status="admitted";save();render();toast("Moved back to ward")}
+  else if(a==="ask-delete"){$("#confirm-slot").innerHTML=`<div class="confirm"><b>Delete this record permanently?</b><div class="actions"><button class="danger" data-action="delete" data-id="${id}">Delete</button><button data-action="cancel-delete">Keep</button></div></div>`}
+  else if(a==="cancel-delete"){$("#confirm-slot").innerHTML=""}
+  else if(a==="delete"){S.patients=S.patients.filter(p=>p.id!==id);save();view={name:"ward"};render();toast("Record deleted")}
+  else if(a==="clear-samples"){S.patients=S.patients.filter(p=>!p.sample);save();render();toast("Sample patients removed")}
+  else if(a==="load-samples"){const keep=S.patients;seed();S.patients=keep.concat(S.patients);save();render()}
+});
+document.addEventListener("input",e=>{
+  if(e.target.id==="search"){q=e.target.value;const pos=e.target.selectionStart;render();const s=$("#search");s.focus();try{s.setSelectionRange(pos,pos)}catch(_){}}
+  if(e.target.closest("#vform"))updatePreview();
+});
+document.addEventListener("change",e=>{if(e.target.closest("#vform"))updatePreview()});
+document.addEventListener("submit",e=>{
+  e.preventDefault();const f=e.target,id=f.dataset.id;
+  if(f.id==="pform"){
+    const g=x=>$("#"+x).value.trim();
+    const d={name:g("f-name"),dob:g("f-dob"),sex:g("f-sex"),ipd:g("f-ipd"),bed:g("f-bed"),unit:g("f-unit"),consultant:g("f-consultant"),admittedAt:new Date(g("f-admitted")||Date.now()).toISOString(),weight:num(g("f-weight")),diagnosis:g("f-dx"),gaWeeks:num(g("f-ga")),birthWeight:num(g("f-bw")),referredFrom:g("f-ref"),transport:g("f-transport"),scheme:g("f-scheme")};
+    if(!d.name||!d.dob){toast("Name and date of birth are required");return}
+    if(new Date(d.dob)>new Date()){toast("Date of birth can't be in the future");return}
+    if(id){Object.assign(get(id),d);save();view={name:"patient",id};toast("Details saved")}
+    else{const p=Object.assign({id:uid(),status:"admitted",vitals:[],notes:[],override:null},d);S.patients.push(p);save();view={name:"vitals",id:p.id};toast("Admitted. Enter first vitals")}
+    render();if(view.name==="vitals")updatePreview();
+  }else if(f.id==="vform"){
+    const v=readVitals();if(Object.keys(v).length<2){toast("Enter at least one value");return}
+    const p=get(id);p.vitals.push(v);save();view={name:"patient",id};render();toast("Vitals saved · "+LV[status(p).level].label);
+  }else if(f.id==="nform"){
+    const n={at:new Date().toISOString(),s:$("#n-s").value.trim(),o:$("#n-o").value.trim(),a:$("#n-a").value.trim(),p:$("#n-p").value.trim()};
+    if(!n.s&&!n.o&&!n.a&&!n.p){toast("The note is empty");return}
+    get(id).notes.push(n);save();view={name:"patient",id};render();toast("Note saved");
+  }else if(f.id==="oform"){
+    const r=$("#o-reason").value.trim();if(!r){toast("Add a reason");return}
+    get(id).override={level:$("#o-level").value,reason:r,at:new Date().toISOString()};save();view={name:"patient",id};render();toast("Colour updated");
+  }
+});
+
+if(!load())seed();
+render();
+try{if("serviceWorker" in navigator&&/^https?:/.test(location.protocol)&&document.querySelector('link[rel="manifest"]'))navigator.serviceWorker.register("sw.js").catch(()=>{})}catch(e){}
+})();
+</script>
+</body></html>
