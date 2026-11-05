@@ -36,6 +36,7 @@ Open `index.html` in a browser, or enable **GitHub Pages** (Settings â†’ Pages â
   - Sepsis / DKA / SAM diagnosed but protocol not marked started.
   - Newborn vitamin K, BCG, OPV-0, Hep B-0; nutrition plan; consent; referral pending; parents counselled; I/O charted; weight today.
 - **Medicines** with live weight-based dose check against ~55 commonly used paediatric drugs (doses per IAP Drug Formulary / Harriet Lane / BNFc practice), grouped by system, with Indian formulations so the dose is shown in **mL of syrup, drops or injection**. Age- and weight-banded fixed doses for zinc, vitamin A, albendazole, salbutamol and ipratropium nebs, and newborn vitamin K.
+- **Neonatal dosing intervals** by gestation, postnatal and postmenstrual age (NeoFax-style tables) for gentamicin, amikacin, ampicillin, cefotaxime, cloxacillin, vancomycin, meropenem, acyclovir, phenobarbitone and caffeine; the interval is pre-selected and a mismatch raises an alert (urgent if an aminoglycoside or vancomycin is given too often).
 - **Investigations**: order, duplicate-order warning (needs a second tap), result entry with low/high/critical flags, mark seen.
 - **Lines and tubes** with insertion time and removal.
 - **Daily checklist**: weight, I/O, counselling, consent, nutrition, referral, protocols, newborn care.

@@ -557,7 +557,28 @@ const FORM=[
  {g:"Other",id:"iron",name:"Iron (elemental)",per:[2,6],max:200,freq:"once daily (treatment 3–6 mg/kg/day)",note:"enter dose as elemental iron"},
  {g:"Other",id:"other",name:"Other (no automatic check)"}
 ];
-const FREQ=[[1,"Once daily / once"],[2,"12-hourly"],[3,"8-hourly"],[4,"6-hourly"],[6,"4-hourly"],[8,"3-hourly"]];
+const FREQ=[[0.5,"48-hourly"],[0.667,"36-hourly"],[1,"Once daily / 24-hourly"],[1.333,"18-hourly"],[2,"12-hourly"],[3,"8-hourly"],[4,"6-hourly"],[6,"4-hourly"],[8,"3-hourly"]];
+
+/* ---- neonatal regimens by gestation (GA), postnatal age (PNA) and postmenstrual age (PMA) ----
+   Based on NeoFax-style tables used in Indian NICUs. Applies to babies with gestation entered,
+   PNA < 90 days and PMA < 48 weeks. */
+function neoAges(p){const ga=Number(p.gaWeeks);if(!ga)return null;const pna=ageDays(p.dob);const pma=ga+pna/7;if(pna>=90||pma>=48)return null;return{ga,pna,pma}}
+function pmaTable(pma,pna){ /* ampicillin, cefotaxime style */
+  if(pma<=29)return pna<=28?12:8; if(pma<=36)return pna<=14?12:8; if(pma<=44)return pna<=7?12:8; return 6}
+const NEO={
+  gentamicin:a=>a.pma<=29?(a.pna<=7?[5,48]:a.pna<=28?[4,36]:[4,24]):a.pma<=34?(a.pna<=7?[4.5,36]:[4,24]):[4,24],
+  amikacin:a=>a.pma<=29?(a.pna<=7?[18,48]:a.pna<=28?[15,36]:[15,24]):a.pma<=34?(a.pna<=7?[18,36]:[15,24]):[15,24],
+  ampicillin:a=>["50 (100 for meningitis)",pmaTable(a.pma,a.pna)],
+  cefotaxime:a=>[50,pmaTable(a.pma,a.pna)],
+  vancomycin:a=>["10–15",a.pma<=29?(a.pna<=14?18:12):a.pma<=36?(a.pna<=14?12:8):a.pma<=44?(a.pna<=7?12:8):6],
+  meropenem:a=>["20 (40 for meningitis)",a.ga<32?(a.pna<14?12:8):8],
+  acyclovir:a=>[20,a.pma<30?12:8],
+  cloxacillin:a=>["25–50",pmaTable(a.pma,a.pna)],
+  "phenobarb":()=>["3–5",24],
+  caffeine:()=>["5–10",24]
+};
+function neoRegimen(p,drug){const a=neoAges(p);if(!a||!NEO[drug])return null;const [dose,h]=NEO[drug](a);return{dose,h,a,text:`Neonatal: ${dose} mg/kg every ${h} h (GA ${a.ga} wk, PNA ${a.pna} d, PMA ${r1(a.pma)} wk)`}}
+function neoIntervalProblem(p,m){const r=neoRegimen(p,m.drug);if(!r)return null;const h=24/(m.perDay||1);return Math.abs(h-r.h)>1.5?`interval every ${Math.round(h)} h; usual every ${r.h} h for GA ${r.a.ga} wk, PNA ${r.a.pna} d`:null}
 function fx(id){return FORM.find(f=>f.id===id)}
 function r1(x){return Math.round(x*10)/10}
 function r2(x){return x<10?Math.round(x*100)/100:r1(x)}
@@ -636,6 +657,8 @@ function alerts(p){
     if(c.st==="low")add("med",`${name}: ${c.text}`,"meds");
     if(c.st==="noweight")add("med",`${name}: no weight recorded, dose not checked`,"meds");
     if(f&&f.nsaid&&/dengue/.test(dx))add("high",`${name} with dengue: NSAIDs usually avoided (bleeding risk)`,"meds");
+    const ni=neoIntervalProblem(p,m);if(ni)add(/gentamicin|amikacin|vancomycin/.test(m.drug)&&24/(m.perDay||1)<NEO[m.drug](neoAges(p))[1]?"high":"med",`${name}: ${ni}`,"meds");
+    if(neo&&NEO[m.drug]&&!neoAges(p))add("med",`${name}: enter gestation to check the neonatal dosing interval`,"meds");
     if((f&&f.abx)||m.abx){
       const d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;
       const reviewed=m.reviewedAt&&hrsSince(m.reviewedAt)<24;
@@ -692,7 +715,7 @@ function medVol(m){const f=fx(m.drug),fo=f&&f.forms&&m.form&&f.forms.find(x=>x.l
 function medName(m){return m.drug==="other"?m.name:fx(m.drug).name}
 function medsSummary(p){
   const act=p.meds.filter(m=>m.active);
-  return`<h3>Medicines · ${act.length} active</h3>`+(act.length?`<div class="tablewrap"><table><thead><tr><th>Drug</th><th>Dose</th><th>Check</th><th>Day</th></tr></thead><tbody>${act.map(m=>{const c=checkDose(p,m),d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;return`<tr><td>${esc(medName(m))}</td><td class="mono">${esc(m.dose)} ${esc(m.unit||"mg")}${medVol(m)} × ${m.perDay}/d ${esc(m.route||"")}</td><td class="ck ck-${c.st}" style="text-align:left;white-space:normal">${esc(c.text)}</td><td class="mono">${d}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="panel muted">No active medicines.</div>`);
+  return`<h3>Medicines · ${act.length} active</h3>`+(act.length?`<div class="tablewrap"><table><thead><tr><th>Drug</th><th>Dose</th><th>Check</th><th>Day</th></tr></thead><tbody>${act.map(m=>{const c=checkDose(p,m),d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;return`<tr><td>${esc(medName(m))}</td><td class="mono">${esc(m.dose)} ${esc(m.unit||"mg")}${medVol(m)} · ${(FREQ.find(f=>f[0]==m.perDay)||[0,m.perDay+"×/day"])[1]} ${esc(m.route||"")}</td><td class="ck ck-${c.st}" style="text-align:left;white-space:normal">${esc(c.text)}</td><td class="mono">${d}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="panel muted">No active medicines.</div>`);
 }
 function invSummary(p){
   const pend=p.inv.filter(i=>i.status==="pending"),res=p.inv.filter(i=>i.status!=="pending").slice(-6).reverse();
@@ -859,6 +882,10 @@ function mUpdate(){
     if(form&&fsel.dataset.last!==form.l){fsel.dataset.last=form.l;$("#m-route").value=/^Inj/.test(form.l)?($("#m-route").value==="IM"?"IM":"IV"):/Respule|Respirator/.test(form.l)?"Neb":"Oral"}
     if(form&&form.c)h+=`<div class="mono">= ${r2(dose/form.c)} mL of ${esc(form.l)}</div>`;else{const v=volText(fm,dose);if(v)h+=`<div class="muted">= ${esc(v)}</div>`}}
   if(fm&&fm.nsaid&&/dengue/i.test(p.diagnosis||""))h+=`<div class="ck ck-high">Patient has dengue: NSAIDs usually avoided</div>`;
+  const nr=neoRegimen(p,drug);
+  if(nr){h+=`<div class="ck ck-ok"><b>${esc(nr.text)}</b></div>`;if(fw.dataset.neo!==drug){fw.dataset.neo=drug;const best=FREQ.reduce((b,x)=>Math.abs(24/x[0]-nr.h)<Math.abs(24/b[0]-nr.h)?x:b);$("#m-freq").value=String(best[0])}
+    const ni=neoIntervalProblem(p,{drug,perDay:Number($("#m-freq").value)});if(ni)h+=`<div class="ck ck-high">Check interval: ${esc(ni)}</div>`}
+  else if(band(p.dob)==="neo"&&NEO[drug])h+=`<div class="ck ck-low">Enter gestation (Edit details) to get the neonatal dosing interval</div>`;
   $("#mpreview").innerHTML=h;
 }
 function iUpdate(){
