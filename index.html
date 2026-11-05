@@ -484,51 +484,107 @@ function normalize(p){
   if(p.fluidPct==null)p.fluidPct=100;
 }
 
-/* ---- formulary: per = mg/kg/dose range, max = mg/dose, dayMax = mg/kg/day, dayAbs = mg/day ---- */
+/* ---- formulary ----
+   Doses as commonly used by Indian paediatricians (IAP Drug Formulary, Harriet Lane, BNFc).
+   per = mg/kg/dose range · max = mg/dose · dayMax = mg/kg/day · dayAbs = mg/day
+   forms = Indian formulations, c = mg per mL (used to show the volume to give)
+   fixed(p) = age/weight-banded fixed doses. Neonatal intervals vary with gestation and postnatal age. */
+const yrs=p=>ageDays(p.dob)/365.25;
 const FORM=[
- {id:"ampicillin",name:"Ampicillin",per:[25,100],max:2000,freq:"6-hourly (neonate 8–12-hourly)",abx:1,note:"100 mg/kg/dose for meningitis"},
- {id:"cloxacillin",name:"Cloxacillin",per:[25,50],max:2000,freq:"6-hourly",abx:1},
- {id:"gentamicin",name:"Gentamicin",per:[4,7.5],freq:"once daily (neonate 24–48-hourly)",abx:1},
- {id:"amikacin",name:"Amikacin",per:[15,20],max:1500,freq:"once daily",abx:1},
- {id:"ceftriaxone",name:"Ceftriaxone",per:[50,100],max:2000,dayAbs:4000,freq:"once or twice daily",abx:1},
- {id:"cefotaxime",name:"Cefotaxime",per:[25,75],max:2000,freq:"6–8-hourly",abx:1},
- {id:"piptaz",name:"Piperacillin-tazobactam",per:[80,100],max:4000,freq:"6–8-hourly",abx:1,note:"dose as piperacillin"},
- {id:"meropenem",name:"Meropenem",per:[10,40],max:2000,freq:"8-hourly",abx:1,note:"40 mg/kg/dose for meningitis"},
- {id:"vancomycin",name:"Vancomycin",per:[10,20],freq:"6–8-hourly",abx:1,note:"monitor levels"},
- {id:"metronidazole",name:"Metronidazole",per:[7.5,15],max:500,freq:"8-hourly",abx:1},
- {id:"azithromycin",name:"Azithromycin",per:[5,10],max:500,freq:"once daily",abx:1},
- {id:"acyclovir",name:"Acyclovir",per:[10,20],freq:"8-hourly",abx:1},
- {id:"fluconazole",name:"Fluconazole",per:[6,12],max:800,freq:"once daily",abx:1},
- {id:"paracetamol",name:"Paracetamol",per:[10,15],max:1000,dayMax:60,dayAbs:4000,freq:"6-hourly"},
- {id:"ibuprofen",name:"Ibuprofen",per:[5,10],max:400,dayMax:40,freq:"6–8-hourly",nsaid:1},
- {id:"ondansetron",name:"Ondansetron",per:[0.1,0.15],max:4,freq:"8-hourly"},
- {id:"furosemide",name:"Furosemide",per:[0.5,2],max:40,freq:"12–24-hourly"},
- {id:"prednisolone",name:"Prednisolone",per:[1,2],max:60,freq:"once daily"},
- {id:"dexamethasone",name:"Dexamethasone",per:[0.15,0.6],max:16,freq:"as per indication"},
- {id:"hydrocortisone",name:"Hydrocortisone",per:[1,4],max:100,freq:"6-hourly"},
- {id:"phenobarb-load",name:"Phenobarbitone (loading)",per:[15,20],freq:"once",note:"may repeat 10 mg/kg up to 40 mg/kg total"},
- {id:"phenobarb",name:"Phenobarbitone (maintenance)",per:[2.5,5],freq:"once daily"},
- {id:"phenytoin-load",name:"Phenytoin (loading)",per:[15,20],max:1500,freq:"once, over 20 min"},
- {id:"levetiracetam-load",name:"Levetiracetam (loading)",per:[20,60],max:3000,freq:"once"},
- {id:"midazolam",name:"Midazolam (bolus)",per:[0.1,0.2],max:10,freq:"may repeat once"},
- {id:"calcium",name:"Calcium gluconate",per:[50,100],max:2000,freq:"slow IV with ECG",note:"10% = 100 mg/mL"},
- {id:"other",name:"Other (no automatic check)"}
+ /* Antimicrobials */
+ {g:"Antimicrobials",id:"amoxicillin",name:"Amoxicillin (oral)",per:[15,45],max:1000,dayMax:90,freq:"8–12-hourly (25–50 mg/kg/day; 80–90 high dose)",abx:1,forms:[{l:"Drops 100 mg/mL",c:100},{l:"Syrup 125 mg/5 mL",c:25},{l:"Syrup 250 mg/5 mL",c:50}]},
+ {g:"Antimicrobials",id:"coamox",name:"Amoxicillin-clavulanate (oral)",per:[15,45],max:875,dayMax:90,freq:"12-hourly (dose as amoxicillin)",abx:1,forms:[{l:"Syrup 228.5 mg/5 mL (200 mg amox)",c:40},{l:"Syrup 457 mg/5 mL (400 mg amox)",c:80}]},
+ {g:"Antimicrobials",id:"coamox-iv",name:"Amoxicillin-clavulanate (IV)",per:[25,30],max:1200,freq:"8-hourly (12-hourly < 3 mo)",abx:1,note:"dose as combined amoxicillin + clavulanate"},
+ {g:"Antimicrobials",id:"ampicillin",name:"Ampicillin",per:[25,100],max:2000,dayMax:400,freq:"6-hourly (neonate 8–12-hourly)",abx:1,note:"50 mg/kg/dose usual; 100 mg/kg/dose for meningitis"},
+ {g:"Antimicrobials",id:"cloxacillin",name:"Cloxacillin",per:[25,50],max:2000,freq:"6-hourly",abx:1,forms:[{l:"Syrup 125 mg/5 mL",c:25}]},
+ {g:"Antimicrobials",id:"cefixime",name:"Cefixime",per:[4,10],max:200,dayMax:20,dayAbs:400,freq:"12-hourly (8 mg/kg/day; enteric fever 20 mg/kg/day)",abx:1,forms:[{l:"Syrup 50 mg/5 mL",c:10},{l:"Syrup 100 mg/5 mL",c:20}]},
+ {g:"Antimicrobials",id:"cefpodoxime",name:"Cefpodoxime",per:[4,5],max:200,freq:"12-hourly",abx:1,forms:[{l:"Syrup 50 mg/5 mL",c:10},{l:"Syrup 100 mg/5 mL",c:20}]},
+ {g:"Antimicrobials",id:"cefuroxime-iv",name:"Cefuroxime (IV)",per:[25,50],max:1500,freq:"8-hourly",abx:1},
+ {g:"Antimicrobials",id:"ceftriaxone",name:"Ceftriaxone",per:[50,100],max:2000,dayMax:100,dayAbs:4000,freq:"once daily (meningitis 100 mg/kg/day in 1–2 doses)",abx:1,note:"avoid in neonates with jaundice or calcium infusions"},
+ {g:"Antimicrobials",id:"cefotaxime",name:"Cefotaxime",per:[25,75],max:2000,dayMax:300,freq:"6–8-hourly (neonate 50 mg/kg 8–12-hourly)",abx:1,note:"meningitis 75 mg/kg/dose 6-hourly"},
+ {g:"Antimicrobials",id:"ceftazidime",name:"Ceftazidime",per:[30,50],max:2000,freq:"8-hourly",abx:1},
+ {g:"Antimicrobials",id:"piptaz",name:"Piperacillin-tazobactam",per:[80,100],max:4000,freq:"6–8-hourly",abx:1,note:"dose as piperacillin"},
+ {g:"Antimicrobials",id:"meropenem",name:"Meropenem",per:[20,40],max:2000,freq:"8-hourly",abx:1,note:"20 mg/kg/dose usual; 40 mg/kg/dose for meningitis"},
+ {g:"Antimicrobials",id:"vancomycin",name:"Vancomycin",per:[10,15],dayMax:60,freq:"6-hourly (neonate 8–24-hourly)",abx:1,note:"infuse over 60 min; monitor trough"},
+ {g:"Antimicrobials",id:"gentamicin",name:"Gentamicin",per:[4,7.5],freq:"once daily (neonate 4–5 mg/kg 24–48-hourly)",abx:1,forms:[{l:"Inj 10 mg/mL (paediatric)",c:10},{l:"Inj 40 mg/mL",c:40}]},
+ {g:"Antimicrobials",id:"amikacin",name:"Amikacin",per:[15,20],max:1500,freq:"once daily (neonate 15 mg/kg 24–48-hourly)",abx:1,forms:[{l:"Inj 100 mg/2 mL",c:50},{l:"Inj 500 mg/2 mL",c:250}]},
+ {g:"Antimicrobials",id:"azithromycin",name:"Azithromycin",per:[5,20],max:1000,freq:"once daily",abx:1,note:"10 mg/kg day 1 then 5 mg/kg; enteric fever 10–20 mg/kg (max 1 g)",forms:[{l:"Syrup 100 mg/5 mL",c:20},{l:"Syrup 200 mg/5 mL",c:40}]},
+ {g:"Antimicrobials",id:"clarithromycin",name:"Clarithromycin",per:[7.5,7.5],max:500,freq:"12-hourly",abx:1,forms:[{l:"Syrup 125 mg/5 mL",c:25}]},
+ {g:"Antimicrobials",id:"cotrimoxazole",name:"Cotrimoxazole (as trimethoprim)",per:[4,5],max:160,freq:"12-hourly (PCP 5 mg/kg 6–8-hourly)",abx:1,note:"avoid < 6 weeks",forms:[{l:"Syrup 40 mg TMP/5 mL",c:8}]},
+ {g:"Antimicrobials",id:"doxycycline",name:"Doxycycline",per:[2,2.5],max:100,freq:"12-hourly",abx:1,note:"scrub typhus / rickettsia; short courses acceptable at any age"},
+ {g:"Antimicrobials",id:"metronidazole",name:"Metronidazole",per:[7.5,10],max:500,freq:"8-hourly",abx:1,forms:[{l:"Syrup 200 mg/5 mL (benzoyl)",c:40},{l:"Inj 500 mg/100 mL",c:5}]},
+ {g:"Antimicrobials",id:"linezolid",name:"Linezolid",per:[10,10],max:600,freq:"8-hourly (< 12 y), 12-hourly ≥ 12 y",abx:1,forms:[{l:"Syrup 100 mg/5 mL",c:20},{l:"Inj 600 mg/300 mL",c:2}]},
+ {g:"Antimicrobials",id:"acyclovir",name:"Acyclovir (IV)",per:[10,20],freq:"8-hourly",abx:1,note:"20 mg/kg/dose for HSV encephalitis and neonates"},
+ {g:"Antimicrobials",id:"fluconazole",name:"Fluconazole",per:[6,12],max:800,freq:"once daily (loading 12 mg/kg)",abx:1},
+ {g:"Antimicrobials",id:"artesunate",name:"Artesunate (IV)",per:[2.4,3],freq:"at 0, 12, 24 h then once daily",abx:1,note:"3 mg/kg if < 20 kg, 2.4 mg/kg if ≥ 20 kg"},
+ /* Fever and pain */
+ {g:"Fever and pain",id:"paracetamol",name:"Paracetamol",per:[10,15],max:1000,dayMax:60,dayAbs:4000,freq:"6-hourly (not more often than 4-hourly)",note:"IV in neonates 7.5–10 mg/kg",forms:[{l:"Drops 100 mg/mL",c:100},{l:"Syrup 120 mg/5 mL",c:24},{l:"Syrup 250 mg/5 mL",c:50},{l:"Inj 10 mg/mL (IV)",c:10}]},
+ {g:"Fever and pain",id:"ibuprofen",name:"Ibuprofen",per:[5,10],max:400,dayMax:40,freq:"6–8-hourly",nsaid:1,note:"avoid in dengue, dehydration, AKI; not < 3 months",forms:[{l:"Syrup 100 mg/5 mL",c:20}]},
+ /* Respiratory */
+ {g:"Respiratory",id:"salbutamol-neb",name:"Salbutamol (nebulised)",fixed:p=>({v:wt(p)<20?2.5:5,u:"mg"}),freq:"20-minutely × 3 in acute asthma, then 1–4-hourly",forms:[{l:"Respule 2.5 mg/2.5 mL",c:1},{l:"Respirator solution 5 mg/mL",c:5}]},
+ {g:"Respiratory",id:"ipratropium",name:"Ipratropium (nebulised)",fixed:p=>({v:yrs(p)<12?0.25:0.5,u:"mg"}),freq:"20-minutely × 3 in severe asthma",note:"250 mcg < 12 y, 500 mcg ≥ 12 y",forms:[{l:"Respule 500 mcg/2 mL",c:0.25}]},
+ {g:"Respiratory",id:"magsulf",name:"Magnesium sulphate (IV, asthma)",per:[25,50],max:2000,freq:"once over 20 min",forms:[{l:"Inj 50% (500 mg/mL)",c:500}]},
+ /* Steroids */
+ {g:"Steroids",id:"prednisolone",name:"Prednisolone",per:[1,2],max:60,freq:"once daily",note:"asthma 1–2 mg/kg (max 40); nephrotic 2 mg/kg/day (max 60)",forms:[{l:"Syrup 5 mg/5 mL",c:1},{l:"Syrup 15 mg/5 mL",c:3}]},
+ {g:"Steroids",id:"dexamethasone",name:"Dexamethasone",per:[0.15,0.6],max:16,freq:"as per indication",note:"croup 0.15–0.6 mg/kg once; meningitis 0.15 mg/kg 6-hourly × 4 days",forms:[{l:"Inj 4 mg/mL",c:4}]},
+ {g:"Steroids",id:"hydrocortisone",name:"Hydrocortisone",per:[1,4],max:100,freq:"6-hourly",note:"asthma 4 mg/kg; adrenal / refractory shock 1–2 mg/kg"},
+ {g:"Steroids",id:"methylpred",name:"Methylprednisolone",per:[1,30],max:1000,freq:"once daily (pulse) or 6–12-hourly",note:"pulse 30 mg/kg/day (max 1 g) × 3–5 days; otherwise 1–2 mg/kg/dose"},
+ /* Seizures */
+ {g:"Seizures",id:"lorazepam",name:"Lorazepam (IV)",per:[0.1,0.1],max:4,freq:"may repeat once after 5–10 min",forms:[{l:"Inj 2 mg/mL",c:2}]},
+ {g:"Seizures",id:"midazolam",name:"Midazolam (bolus)",per:[0.1,0.3],max:10,freq:"may repeat once",note:"IV 0.1–0.2 mg/kg; IN / buccal 0.2–0.3 mg/kg (max 10 mg)",forms:[{l:"Inj 1 mg/mL",c:1},{l:"Inj 5 mg/mL",c:5}]},
+ {g:"Seizures",id:"diazepam",name:"Diazepam",per:[0.2,0.5],max:20,freq:"may repeat once",note:"IV 0.2–0.3 mg/kg (max 10); PR 0.5 mg/kg (max 20)",forms:[{l:"Inj 5 mg/mL",c:5}]},
+ {g:"Seizures",id:"phenobarb-load",name:"Phenobarbitone (loading)",per:[15,20],max:1000,freq:"once over 20 min",note:"may repeat 10 mg/kg up to 40 mg/kg total",forms:[{l:"Inj 200 mg/mL",c:200}]},
+ {g:"Seizures",id:"phenobarb",name:"Phenobarbitone (maintenance)",per:[2.5,5],freq:"once daily (or 12-hourly)",forms:[{l:"Syrup 20 mg/5 mL",c:4},{l:"Inj 200 mg/mL",c:200}]},
+ {g:"Seizures",id:"phenytoin-load",name:"Phenytoin (loading)",per:[15,20],max:1500,freq:"once, ≤ 1 mg/kg/min in NS",forms:[{l:"Inj 50 mg/mL",c:50}]},
+ {g:"Seizures",id:"phenytoin",name:"Phenytoin (maintenance)",per:[2.5,4],max:300,freq:"12-hourly (5–8 mg/kg/day)",forms:[{l:"Syrup 30 mg/5 mL",c:6},{l:"Syrup 125 mg/5 mL",c:25},{l:"Inj 50 mg/mL",c:50}]},
+ {g:"Seizures",id:"levetiracetam-load",name:"Levetiracetam (loading)",per:[40,60],max:3000,freq:"once over 15 min",forms:[{l:"Inj 100 mg/mL",c:100}]},
+ {g:"Seizures",id:"levetiracetam",name:"Levetiracetam (maintenance)",per:[10,30],max:1500,freq:"12-hourly",forms:[{l:"Syrup 100 mg/mL",c:100},{l:"Inj 100 mg/mL",c:100}]},
+ {g:"Seizures",id:"valproate-load",name:"Sodium valproate (loading)",per:[20,40],max:3000,freq:"once over 10–15 min",note:"avoid < 2 y and in suspected metabolic / liver disease",forms:[{l:"Inj 100 mg/mL",c:100}]},
+ /* GI */
+ {g:"GI and nutrition",id:"ondansetron",name:"Ondansetron",per:[0.1,0.15],max:4,freq:"8-hourly",forms:[{l:"Syrup 2 mg/5 mL",c:0.4},{l:"Inj 2 mg/mL",c:2}]},
+ {g:"GI and nutrition",id:"pantoprazole",name:"Pantoprazole (IV)",per:[0.5,1],max:40,freq:"once daily"},
+ {g:"GI and nutrition",id:"zinc",name:"Zinc (diarrhoea)",fixed:p=>ageDays(p.dob)<183?{v:10,u:"mg"}:{v:20,u:"mg"},freq:"once daily × 14 days",note:"10 mg < 6 months, 20 mg ≥ 6 months",forms:[{l:"Syrup 20 mg/5 mL",c:4},{l:"Dispersible tab 20 mg",c:null}]},
+ {g:"GI and nutrition",id:"vitamin-a",name:"Vitamin A (measles / SAM)",unit:"IU",fixed:p=>{const m=ageDays(p.dob)/30.44;return m<6?{v:50000,u:"IU"}:m<12?{v:100000,u:"IU"}:{v:200000,u:"IU"}},freq:"day 1, 2 (and 14 if eye signs)",note:"< 6 mo 50,000 · 6–12 mo 1 lakh · > 12 mo 2 lakh IU",forms:[{l:"Solution 1 lakh IU/mL",c:100000}]},
+ {g:"GI and nutrition",id:"albendazole",name:"Albendazole",fixed:p=>yrs(p)<1?null:{v:yrs(p)<2?200:400,u:"mg"},freq:"single dose",note:"200 mg at 1–2 y, 400 mg ≥ 2 y",forms:[{l:"Suspension 400 mg/10 mL",c:40}]},
+ /* Neonatal */
+ {g:"Neonatal",id:"vitamin-k",name:"Vitamin K (newborn)",fixed:p=>({v:wt(p)&&wt(p)<1?0.5:1,u:"mg"}),freq:"single IM dose at birth",note:"1 mg; 0.5 mg if < 1 kg",forms:[{l:"Inj 1 mg/0.5 mL",c:2}]},
+ {g:"Neonatal",id:"caffeine-load",name:"Caffeine citrate (loading)",per:[20,20],freq:"once",note:"apnoea of prematurity",forms:[{l:"Inj / oral 20 mg/mL",c:20}]},
+ {g:"Neonatal",id:"caffeine",name:"Caffeine citrate (maintenance)",per:[5,10],freq:"once daily, 24 h after load",forms:[{l:"Inj / oral 20 mg/mL",c:20}]},
+ /* Other */
+ {g:"Other",id:"furosemide",name:"Furosemide",per:[0.5,2],max:40,freq:"12–24-hourly",forms:[{l:"Inj 10 mg/mL",c:10}]},
+ {g:"Other",id:"spironolactone",name:"Spironolactone",per:[0.5,1.5],max:100,freq:"12-hourly (1–3 mg/kg/day)"},
+ {g:"Other",id:"calcium",name:"Calcium gluconate 10%",per:[50,100],max:2000,freq:"slow IV over 10 min with ECG",note:"0.5–1 mL/kg of 10%",forms:[{l:"Inj 10% (100 mg/mL)",c:100}]},
+ {g:"Other",id:"iron",name:"Iron (elemental)",per:[2,6],max:200,freq:"once daily (treatment 3–6 mg/kg/day)",note:"enter dose as elemental iron"},
+ {g:"Other",id:"other",name:"Other (no automatic check)"}
 ];
-const FREQ=[[1,"Once daily / once"],[2,"12-hourly"],[3,"8-hourly"],[4,"6-hourly"],[6,"4-hourly"]];
+const FREQ=[[1,"Once daily / once"],[2,"12-hourly"],[3,"8-hourly"],[4,"6-hourly"],[6,"4-hourly"],[8,"3-hourly"]];
 function fx(id){return FORM.find(f=>f.id===id)}
 function r1(x){return Math.round(x*10)/10}
+function r2(x){return x<10?Math.round(x*100)/100:r1(x)}
+function drugSelect(id,val){const groups=[...new Set(FORM.map(f=>f.g))];return`<label for="${id}">Drug<select id="${id}" name="${id}">${groups.map(g=>`<optgroup label="${esc(g)}">${FORM.filter(f=>f.g===g).map(f=>`<option value="${f.id}"${f.id===val?" selected":""}>${esc(f.name)}</option>`).join("")}</optgroup>`).join("")}</select></label>`}
+function volText(f,dose){if(!f||!f.forms||!dose)return"";return f.forms.filter(x=>x.c).map(x=>`${r2(dose/x.c)} mL of ${x.l}`).join(" · ")}
+function usualText(p,f){
+  if(!f)return"";if(f.fixed){const e=f.fixed(p);return e?`Usual dose: ${e.v.toLocaleString("en-IN")} ${e.u} · ${f.freq}`:"Not usually given at this age"}
+  const w=wt(p);if(!f.per||!w)return"";const lo=Math.min(f.per[0]*w,f.max||1e9),hi=Math.min(f.per[1]*w,f.max||1e9);
+  return`Usual: ${r2(lo)}${hi!==lo?"–"+r2(hi):""} mg per dose${f.max?` (max ${f.max} mg)`:""} · ${f.freq}`;
+}
 function checkDose(p,m){
   const f=fx(m.drug),w=wt(p);
-  if(!f||!f.per)return{st:"unknown",text:"No automatic check for this drug"};
+  if(!f||(!f.per&&!f.fixed))return{st:"unknown",text:"No automatic check for this drug"};
+  const d=Number(m.dose);
+  if(f.fixed){const e=f.fixed(p);if(!e)return{st:"low",text:"Not usually given at this age"};
+    if(Math.abs(d-e.v)/e.v<=0.05)return{st:"ok",text:`Matches usual ${e.v.toLocaleString("en-IN")} ${e.u} for age/weight`};
+    return{st:d>e.v?"high":"low",text:`${d>e.v?"Above":"Below"} usual ${e.v.toLocaleString("en-IN")} ${e.u} for age/weight`}}
   if(!w)return{st:"noweight",text:"Enter weight to check dose"};
-  const d=Number(m.dose),pk=d/w,day=d*(m.perDay||1),probs=[];
-  if(f.max&&d>f.max)probs.push(`above max single dose ${f.max} mg`);
-  if(pk>f.per[1]*1.1)probs.push(`${r1(pk)} mg/kg/dose is above ${f.per[1]}`);
+  const pk=d/w,day=d*(m.perDay||1),probs=[];
+  if(f.max&&d>f.max*1.02)probs.push(`above max single dose ${f.max} mg`);
+  if(pk>f.per[1]*1.1&&!(f.max&&d<=f.max&&pk>f.per[1]*1.1&&w*f.per[0]>f.max))probs.push(`${r1(pk)} mg/kg/dose is above ${f.per[1]}`);
   if(f.dayMax&&day/w>f.dayMax*1.05)probs.push(`${r1(day/w)} mg/kg/day is above ${f.dayMax}`);
   if(f.dayAbs&&day>f.dayAbs)probs.push(`${day} mg/day is above ${f.dayAbs}`);
   if(probs.length)return{st:"high",text:"Possible overdose: "+probs.join("; ")};
-  if(pk<f.per[0]*0.9)return{st:"low",text:`${r1(pk)} mg/kg/dose is below usual ${f.per[0]}–${f.per[1]}`};
-  return{st:"ok",text:`${r1(pk)} mg/kg/dose · usual ${f.per[0]}–${f.per[1]} mg/kg ${f.freq}`};
+  const capped=f.max&&f.per[0]*w>f.max;
+  if(pk<f.per[0]*0.9&&!(capped&&d>=f.max*0.9))return{st:"low",text:`${r1(pk)} mg/kg/dose is below usual ${f.per[0]}–${f.per[1]}`};
+  return{st:"ok",text:`${r1(pk)} mg/kg/dose · usual ${f.per[0]}${f.per[1]!==f.per[0]?"–"+f.per[1]:""} mg/kg ${f.freq}`};
 }
 
 /* ---- labs with age-aware ranges and critical limits ---- */
@@ -632,10 +688,11 @@ function alertsPanel(p){
 }
 
 /* ---- patient summaries for detail view ---- */
+function medVol(m){const f=fx(m.drug),fo=f&&f.forms&&m.form&&f.forms.find(x=>x.l===m.form);return fo&&fo.c?` (${r2(m.dose/fo.c)} mL ${fo.l})`:""}
 function medName(m){return m.drug==="other"?m.name:fx(m.drug).name}
 function medsSummary(p){
   const act=p.meds.filter(m=>m.active);
-  return`<h3>Medicines · ${act.length} active</h3>`+(act.length?`<div class="tablewrap"><table><thead><tr><th>Drug</th><th>Dose</th><th>Check</th><th>Day</th></tr></thead><tbody>${act.map(m=>{const c=checkDose(p,m),d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;return`<tr><td>${esc(medName(m))}</td><td class="mono">${esc(m.dose)} ${esc(m.unit||"mg")} × ${m.perDay}/d ${esc(m.route||"")}</td><td class="ck ck-${c.st}" style="text-align:left;white-space:normal">${esc(c.text)}</td><td class="mono">${d}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="panel muted">No active medicines.</div>`);
+  return`<h3>Medicines · ${act.length} active</h3>`+(act.length?`<div class="tablewrap"><table><thead><tr><th>Drug</th><th>Dose</th><th>Check</th><th>Day</th></tr></thead><tbody>${act.map(m=>{const c=checkDose(p,m),d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;return`<tr><td>${esc(medName(m))}</td><td class="mono">${esc(m.dose)} ${esc(m.unit||"mg")}${medVol(m)} × ${m.perDay}/d ${esc(m.route||"")}</td><td class="ck ck-${c.st}" style="text-align:left;white-space:normal">${esc(c.text)}</td><td class="mono">${d}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="panel muted">No active medicines.</div>`);
 }
 function invSummary(p){
   const pend=p.inv.filter(i=>i.status==="pending"),res=p.inv.filter(i=>i.status!=="pending").slice(-6).reverse();
@@ -647,13 +704,13 @@ function invSummary(p){
 /* ---- views ---- */
 function back(p){return`<div class="actions" style="margin-top:12px"><button class="ghost" data-action="open" data-id="${p.id}">← ${esc(p.name)}</button></div>`}
 function medsView(p){
-  const opts=FORM.map(f=>[f.id,f.name]);
   let h=back(p)+`<h2>Medicines · ${esc(p.name)}</h2><p class="muted">Weight ${wt(p)?wt(p)+" kg":"<b>not recorded</b>"}. Doses are checked against a starting formulary; verify with your unit protocol.</p>`;
   h+=`<form id="mform" class="form" data-id="${p.id}">
-   <div class="full">${sel("m-drug","Drug","ampicillin",opts)}</div>
+   <div class="full">${drugSelect("m-drug","ampicillin")}</div>
+   <div class="full" id="m-form-wrap"></div>
    <div class="full" id="m-other-wrap" hidden>${field("m-name","Drug name","")}</div>
    ${field("m-dose","Dose per administration","","number","step=\"any\" min=\"0\" inputmode=\"decimal\" required")}
-   ${sel("m-unit","Unit","mg",["mg","mcg","units","mL"])}
+   ${sel("m-unit","Unit","mg",["mg","mcg","units","IU","mL"])}
    ${sel("m-freq","Frequency",4,FREQ)}
    ${sel("m-route","Route","IV",["IV","IM","Oral","NG","Neb","SC","PR"])}
    ${field("m-start","Started","", "datetime-local")}
@@ -663,7 +720,7 @@ function medsView(p){
    <div class="full actions"><button type="submit" class="primary">Add medicine</button></div>
   </form>`;
   const all=p.meds.slice().reverse();
-  if(all.length){h+=`<h3>Current and past</h3><div class="list">${all.map(m=>{const c=checkDose(p,m),d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;return`<div class="panel ${m.active?"":"muted"}"><div class="row-between"><b>${esc(medName(m))}</b><span class="mono">${m.active?"Day "+d:"Stopped"}</span></div><div class="mono">${esc(m.dose)} ${esc(m.unit||"mg")} · ${FREQ.find(f=>f[0]==m.perDay)[1]} · ${esc(m.route)}${m.stop?" · stop "+esc(m.stop):""}</div>${m.active?`<div class="ck ck-${c.st}">${esc(c.text)}</div><div class="actions"><button class="small" data-action="med-review" data-id="${p.id}" data-mid="${m.id}">Mark reviewed today</button><button class="small" data-action="med-stop" data-id="${p.id}" data-mid="${m.id}">Stop</button></div>`:""}</div>`}).join("")}</div>`}
+  if(all.length){h+=`<h3>Current and past</h3><div class="list">${all.map(m=>{const c=checkDose(p,m),d=Math.floor((Date.now()-new Date(m.start).getTime())/DAY)+1;return`<div class="panel ${m.active?"":"muted"}"><div class="row-between"><b>${esc(medName(m))}</b><span class="mono">${m.active?"Day "+d:"Stopped"}</span></div><div class="mono">${esc(m.dose)} ${esc(m.unit||"mg")}${medVol(m)} · ${(FREQ.find(f=>f[0]==m.perDay)||[0,m.perDay+"×/day"])[1]} · ${esc(m.route)}${m.stop?" · stop "+esc(m.stop):""}</div>${m.active?`<div class="ck ck-${c.st}">${esc(c.text)}</div><div class="actions"><button class="small" data-action="med-review" data-id="${p.id}" data-mid="${m.id}">Mark reviewed today</button><button class="small" data-action="med-stop" data-id="${p.id}" data-mid="${m.id}">Stop</button></div>`:""}</div>`}).join("")}</div>`}
   return h;
 }
 function invView(p){
@@ -774,25 +831,33 @@ function calcView(p){
   }else if(t==="resus"){
     h+=`<div class="tablewrap"><table><thead><tr><th>Drug / action</th><th>For ${w} kg</th><th>Rule</th></tr></thead><tbody>${resusRows(w,ageY).map(r=>`<tr><td style="white-space:normal">${r[0]}</td><td class="mono"><b>${r[1]}</b></td><td class="muted" style="text-align:left;white-space:normal">${r[2]}</td></tr>`).join("")}</tbody></table></div>`;
   }else{
-    h+=`<form id="kdose" class="form"><div class="full">${sel("kd-drug","Drug",calcState.kd||"paracetamol",FORM.filter(f=>f.per).map(f=>[f.id,f.name]))}</div>${field("kd-dose","Dose (mg)",calcState.kdose||"","number","step=\"any\" min=\"0\" inputmode=\"decimal\"")}${sel("kd-freq","Frequency",calcState.kfreq||4,FREQ)}</form><div id="kdout" style="margin-top:12px"></div>`;
+    h+=`<form id="kdose" class="form"><div class="full">${drugSelect("kd-drug",calcState.kd||"paracetamol")}</div>${field("kd-dose","Dose (mg)",calcState.kdose||"","number","step=\"any\" min=\"0\" inputmode=\"decimal\"")}${sel("kd-freq","Frequency",calcState.kfreq||4,FREQ)}</form><div id="kdout" style="margin-top:12px"></div>`;
   }
   return h+`<p class="disclaimer">Calculators are aids only. Check every dose, dilution and rate independently before giving.</p>`;
 }
 function kdUpdate(){
-  const o=$("#kdout");if(!o)return;const f=fx($("#kd-drug").value),d=num($("#kd-dose").value),w=view.id?wt(get(view.id)):calcState.w;
+  const o=$("#kdout");if(!o)return;const f=fx($("#kd-drug").value),d=num($("#kd-dose").value),pp=view.id?get(view.id):{weight:calcState.w,dob:calcState.age!=null?new Date(Date.now()-calcState.age*365.25*DAY).toISOString():new Date(Date.now()-5*365.25*DAY).toISOString()};
   calcState.kd=f.id;calcState.kdose=d;calcState.kfreq=Number($("#kd-freq").value);
-  const lo=w?r1(f.per[0]*w):null,hi=w?r1(f.per[1]*w):null;
-  if(!w){o.innerHTML="";return}
-  let h=`<div class="panel"><div>Usual for ${w} kg: <b class="mono">${lo}–${hi} mg</b> per dose${f.max?` (max ${f.max} mg)`:""} · ${esc(f.freq)}</div>${f.note?`<div class="muted">${esc(f.note)}</div>`:""}`;
-  if(d){const c=checkDose({weight:w},{drug:f.id,dose:d,perDay:calcState.kfreq});h+=`<div class="ck ck-${c.st}" style="margin-top:6px">${esc(c.text)}</div>`}
+  if(!pp.weight&&!f.fixed){o.innerHTML="";return}
+  let h=`<div class="panel"><div><b>${esc(usualText(pp,f)||"No automatic check for this drug")}</b></div>${f.note?`<div class="muted">${esc(f.note)}</div>`:""}`;
+  if(d){const c=checkDose(pp,{drug:f.id,dose:d,perDay:calcState.kfreq});h+=`<div class="ck ck-${c.st}" style="margin-top:6px">${esc(c.text)}</div>`;const v=volText(f,d);if(v)h+=`<div class="mono" style="margin-top:6px">= ${esc(v)}</div>`}
+  else if(f.forms&&f.per&&pp.weight){const lo=Math.min(f.per[0]*pp.weight,f.max||1e9),hi=Math.min(f.per[1]*pp.weight,f.max||1e9);h+=`<div class="muted" style="margin-top:6px">Volume: ${f.forms.filter(x=>x.c).map(x=>`${esc(x.l)} ${r2(lo/x.c)}${hi!==lo?"–"+r2(hi/x.c):""} mL`).join(" · ")}</div>`}
+  else if(f.forms&&f.fixed){const e=f.fixed(pp);if(e)h+=`<div class="muted" style="margin-top:6px">= ${esc(volText(f,e.v))}</div>`}
   o.innerHTML=h+`</div>`;
 }
 function mUpdate(){
-  const f=$("#mform");if(!f)return;const p=get(f.dataset.id),drug=$("#m-drug").value,other=drug==="other";
+  const f=$("#mform");if(!f)return;const p=get(f.dataset.id),drug=$("#m-drug").value,other=drug==="other",fm=fx(drug);
   $("#m-other-wrap").hidden=!other;$("#m-abx-wrap").hidden=!other;
-  const dose=num($("#m-dose").value),fm=fx(drug);let h="";
-  if(fm&&fm.per&&wt(p))h+=`<div class="muted">Usual: ${r1(fm.per[0]*wt(p))}–${r1(fm.per[1]*wt(p))} mg per dose${fm.max?` (max ${fm.max})`:""} · ${esc(fm.freq)}${fm.note?" · "+esc(fm.note):""}</div>`;
-  if(dose&&!other){const c=checkDose(p,{drug,dose,perDay:Number($("#m-freq").value)});h+=`<div class="ck ck-${c.st}">${esc(c.text)}</div>`}
+  const fw=$("#m-form-wrap");if(fw.dataset.drug!==drug){fw.dataset.drug=drug;
+    fw.innerHTML=fm&&fm.forms?sel("m-form","Formulation","",[["","—"]].concat(fm.forms.map(x=>[x.l,x.l]))):"";
+    if(fm&&fm.unit)$("#m-unit").value=fm.unit;else if(fm&&!other)$("#m-unit").value="mg";
+    if(fm&&fm.fixed){const e=fm.fixed(p);if(e&&!$("#m-dose").value)$("#m-dose").value=e.v}}
+  const dose=num($("#m-dose").value);let h="";
+  const u=usualText(p,fm);if(u&&!other)h+=`<div class="muted">${esc(u)}${fm.note?" · "+esc(fm.note):""}</div>`;
+  if(dose&&!other){const c=checkDose(p,{drug,dose,perDay:Number($("#m-freq").value)});h+=`<div class="ck ck-${c.st}">${esc(c.text)}</div>`;
+    const fsel=$("#m-form"),form=fsel&&fm.forms.find(x=>x.l===fsel.value);
+    if(form&&fsel.dataset.last!==form.l){fsel.dataset.last=form.l;$("#m-route").value=/^Inj/.test(form.l)?($("#m-route").value==="IM"?"IM":"IV"):/Respule|Respirator/.test(form.l)?"Neb":"Oral"}
+    if(form&&form.c)h+=`<div class="mono">= ${r2(dose/form.c)} mL of ${esc(form.l)}</div>`;else{const v=volText(fm,dose);if(v)h+=`<div class="muted">= ${esc(v)}</div>`}}
   if(fm&&fm.nsaid&&/dengue/i.test(p.diagnosis||""))h+=`<div class="ck ck-high">Patient has dengue: NSAIDs usually avoided</div>`;
   $("#mpreview").innerHTML=h;
 }
@@ -833,7 +898,7 @@ document.addEventListener("submit",e=>{
     const drug=$("#m-drug").value,dose=num($("#m-dose").value);if(!dose){toast("Enter the dose");return}
     if(drug==="other"&&!$("#m-name").value.trim()){toast("Enter the drug name");return}
     const st=$("#m-start").value;
-    p.meds.push({id:uid(),drug,name:$("#m-name").value.trim(),dose,unit:$("#m-unit").value,perDay:Number($("#m-freq").value),route:$("#m-route").value,start:st?new Date(st).toISOString():new Date().toISOString(),stop:$("#m-stop").value||null,abx:drug==="other"&&$("#m-abx").checked,active:true});
+    p.meds.push({id:uid(),drug,form:$("#m-form")?$("#m-form").value:"",name:$("#m-name").value.trim(),dose,unit:$("#m-unit").value,perDay:Number($("#m-freq").value),route:$("#m-route").value,start:st?new Date(st).toISOString():new Date().toISOString(),stop:$("#m-stop").value||null,abx:drug==="other"&&$("#m-abx").checked,active:true});
     save();render2();toast("Medicine added");
   }else if(f.id==="iform"){
     const v=$("#i-test").value,name=v==="Other"?$("#i-other").value.trim():v;if(!name){toast("Enter the test name");return}
