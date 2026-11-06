@@ -17,6 +17,9 @@ Bedside ward-rounds app for the Department of Paediatrics, Government Medical Co
 
 Data is stored in the browser on that device only (`localStorage`). There is no server or sync yet.
 
+## Audit
+See [AUDIT.md](AUDIT.md) for the 6 Nov 2026 clinical and software audit: 24 issues found and fixed, and the remaining risks that need sign-off before ward use.
+
 ## Run it
 Open `index.html` in a browser, or enable **GitHub Pages** (Settings → Pages → Deploy from branch → `main` / root) and open the site URL on your phone, then "Add to Home Screen".
 

@@ -49,7 +49,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:.85rem;font-weight:700;border:1px solid transparent}
 .chip i{width:10px;height:10px;border-radius:50%;display:inline-block}
 .lv-red{--c:var(--red);--cb:var(--red-bg)} .lv-orange{--c:var(--orange);--cb:var(--orange-bg)}
-.lv-yellow{--c:var(--yellow);--cb:var(--yellow-bg)} .lv-green{--c:var(--green);--cb:var(--green-bg)} .lv-none{--c:var(--none);--cb:var(--none-bg)}
+.lv-yellow{--c:var(--yellow);--cb:var(--yellow-bg)} .lv-green{--c:var(--green);--cb:var(--green-bg)} .lv-none,.lv-inc{--c:var(--none);--cb:var(--none-bg)}
 .chip.lv{background:var(--cb);color:var(--c)} .chip.lv i{background:var(--c)}
 .chip.filter{background:var(--surface);border-color:var(--line);color:var(--fg)}
 .chip.filter[aria-pressed="true"]{background:var(--cb);border-color:var(--c);color:var(--c)}
@@ -121,7 +121,8 @@ button.small{min-height:34px;padding:5px 10px;font-size:.85rem;white-space:nowra
 .row-between{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
 .ck{font-size:.88rem;margin-top:4px}
 .ck-high{color:var(--red);font-weight:700} .ck-low,.ck-noweight{color:var(--orange);font-weight:700} .ck-ok{color:var(--green)} .ck-unknown{color:var(--muted)}
-.fl-critical{color:var(--red);font-weight:700} .fl-high,.fl-low{color:var(--orange);font-weight:700}
+.fl-critical{color:var(--red);font-weight:700} .fl-high,.fl-low,.fl-nomogram{color:var(--orange);font-weight:700}
+.savewarn{margin-top:12px;padding:12px;border-radius:var(--r);background:var(--red-bg);color:var(--red);border:2px solid var(--red)}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
 .tab{border-radius:999px;padding:7px 14px;min-height:38px}
 .tab[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
@@ -134,6 +135,7 @@ button.small{min-height:34px;padding:5px 10px;font-size:.85rem;white-space:nowra
   <button class="ghost" data-action="calc" id="btn-calc">Calculators</button>
   <button class="ghost" data-action="home" id="btn-home">Ward</button>
 </div></header>
+<div class="wrap" id="savewarn" hidden><div class="savewarn" role="alert"><b>Not saving.</b> This browser is blocking storage, so anything entered will be lost when the page closes. Open the app in a normal (not private) browser window.</div></div>
 <main class="wrap" id="app"></main>
 <div class="toast" id="toast" hidden></div>
 <script>
@@ -141,13 +143,15 @@ button.small{min-height:34px;padding:5px 10px;font-size:.85rem;white-space:nowra
 "use strict";
 const KEY="gmcasr-paeds-ward-v1";
 const DAY=864e5;
-const LV={red:{label:"Critical",rank:0},orange:{label:"Deteriorating",rank:1},yellow:{label:"Watch closely",rank:2},green:{label:"Stable",rank:3},none:{label:"No vitals yet",rank:4}};
+const LV={red:{label:"Critical",rank:0},orange:{label:"Deteriorating",rank:1},yellow:{label:"Watch closely",rank:2},green:{label:"Stable",rank:3},inc:{label:"Incomplete vitals",rank:2.5},none:{label:"No vitals yet",rank:4}};
 const UP=["green","yellow","orange","red"];
 let S={patients:[]}; let view={name:"ward"}; let filter=null; let q="";
 
 /* ---------- storage ---------- */
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-function load(){try{const t=localStorage.getItem(KEY);if(t){S=JSON.parse(t);return true}}catch(e){}return false}
+function save(){let ok=true;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){ok=false}const b=document.getElementById("savewarn");if(b)b.hidden=ok;return ok}
+function load(){let t=null;try{t=localStorage.getItem(KEY)}catch(e){return false}
+  if(!t)return false;try{S=JSON.parse(t);if(!S||!Array.isArray(S.patients))throw 0;return true}
+  catch(e){try{localStorage.setItem(KEY+"-unreadable-"+Date.now(),t)}catch(_){}S={patients:[]};return false}}
 function uid(){return Math.random().toString(36).slice(2,10)}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function num(v){if(v===""||v==null)return null;const n=Number(v);return isFinite(n)?n:null}
@@ -164,13 +168,13 @@ const RANGE={
  sch:{label:"5–11 y",hr:[70,120],rr:[18,30]},
  ado:{label:"12 y +",hr:[60,100],rr:[12,20]}
 };
-function minSBP(dob){const b=band(dob);if(b==="neo")return 60;if(b==="inf")return 70;const y=ageDays(dob)/365.25;return y<=10?Math.round(70+2*y):90}
+function minSBP(dob){const b=band(dob);if(b==="neo")return 60; /* term neonate; preterm uses MAP < GA */if(b==="inf")return 70;const y=ageDays(dob)/365.25;return y<=10?Math.round(70+2*y):90}
 function dev(v,r){if(v==null)return null;if(v>=r[0]&&v<=r[1])return 0;const d=v>r[1]?(v-r[1])/r[1]:(r[0]-v)/r[0];return d<=.15?1:d<=.3?2:3}
 
 /* ---------- PEWS ---------- */
 function assess(p,v){
   const b=band(p.dob),R=RANGE[b],parts=[],red=[],warn=[];
-  if(!v)return{level:"none",score:null,parts,red,warn};
+  if(!v)return{level:"none",score:null,parts,red,warn,missing:[]};
   const add=(name,val,pts,why)=>{if(pts!=null)parts.push({name,val,pts,why})};
   add("Heart rate",v.hr,dev(v.hr,R.hr),"normal "+R.hr.join("–"));
   add("Resp. rate",v.rr,dev(v.rr,R.rr),"normal "+R.rr.join("–"));
@@ -179,11 +183,16 @@ function assess(p,v){
   if(v.wob)add("Work of breathing",v.wob,{none:0,mild:1,moderate:2,severe:3}[v.wob],"");
   if(v.crt!=null)add("CRT",v.crt+" s",v.crt<=2?0:v.crt<=3?1:3,"");
   if(v.avpu)add("AVPU",v.avpu,{A:0,V:1,P:2,U:3}[v.avpu],"");
-  if(v.temp!=null){let t=0;if(b==="neo"){t=v.temp<35?3:v.temp<36.5?2:v.temp>38?1:0}else{t=v.temp<35?2:v.temp<36?1:v.temp>39.5?2:v.temp>38?1:0}add("Temp",v.temp+" °C",t,"")}
+  if(v.temp!=null){let t=0;if(b==="neo"){t=v.temp<35?3:v.temp<36.5?2:v.temp>=38.5?2:v.temp>=37.5?1:0}else{t=v.temp<35?2:v.temp<36?1:v.temp>39.5?2:v.temp>38?1:0}add("Temp",v.temp+" °C",t,"")}
   const score=parts.reduce((a,x)=>a+x.pts,0);
   /* danger-sign overrides */
   if(v.spo2!=null&&v.spo2<90)red.push("SpO₂ below 90%");
-  if(v.sbp!=null&&v.sbp<minSBP(p.dob))red.push("Hypotension: SBP "+v.sbp+" (min "+minSBP(p.dob)+" for age)");
+  const preterm=b==="neo"&&Number(p.gaWeeks)&&Number(p.gaWeeks)<37;
+  if(v.sbp!=null&&!preterm&&v.sbp<minSBP(p.dob))red.push("Hypotension: SBP "+v.sbp+" (min "+minSBP(p.dob)+" for age)");
+  if(b==="neo"&&v.map!=null){const lim=Number(p.gaWeeks)?Math.min(Number(p.gaWeeks),40):40;if(v.map<lim)red.push("Hypotension: MAP "+v.map+" below "+lim+(Number(p.gaWeeks)?" (gestation in weeks)":""))}
+  if(v.hr!=null&&(v.hr<60||(b==="neo"&&v.hr<80)))red.push("Bradycardia: HR "+v.hr+(v.hr<60?": start CPR if poor perfusion":""));
+  if(v.hr!=null&&v.hr>((b==="neo"||b==="inf")?220:180))red.push("HR "+v.hr+": consider SVT / shock");
+  if(v.rr!=null&&b!=="neo"&&v.rr<10&&!v.apnoea)red.push("Bradypnoea: RR "+v.rr);
   if(v.crt!=null&&v.crt>3)red.push("CRT over 3 s: assess for shock");
   if(v.seizure)red.push("Convulsion");
   if(v.apnoea)red.push("Apnoea");
@@ -194,19 +203,25 @@ function assess(p,v){
   if(v.sugar!=null&&v.sugar>300)warn.push("Blood sugar "+v.sugar+" mg/dL: check ketones");
   if(v.uo!=null&&v.uo<(b==="neo"?1:0.5))warn.push("Urine output "+v.uo+" mL/kg/h: low");
   if(b==="neo"&&v.temp!=null&&v.temp<36.5)warn.push("Neonatal hypothermia risk");
+  if(b==="neo"&&v.temp!=null&&v.temp>=37.5)warn.push("Fever in a neonate: consider sepsis screen");
+  const missing=[];if(v.hr==null)missing.push("HR");if(v.rr==null)missing.push("RR");if(v.spo2==null)missing.push("SpO₂");if(!v.avpu&&v.gcs==null)missing.push("AVPU/GCS");if(v.crt==null)missing.push("CRT");
   let level=score>=7?"red":score>=5?"orange":score>=3?"yellow":"green";
   if(parts.some(x=>x.pts===3)&&UP.indexOf(level)<2)level="orange";
   if(warn.length&&level==="green")level="yellow";
   if(red.length)level="red";
-  return{level,score,parts,red,warn};
+  if(missing.length&&level==="green")level="inc";
+  return{level,score,parts,red,warn,missing};
 }
 function latest(p,i){return p.vitals.length>i?p.vitals[p.vitals.length-1-i]:null}
 function status(p){
   const a=assess(p,latest(p,0)),prev=latest(p,1);
   let trend=null;if(prev&&a.score!=null){const ps=assess(p,prev).score;trend=a.score>ps?"worse":a.score<ps?"better":"same"}
-  let level=a.level;
-  if(p.override&&p.override.level)level=p.override.level;
-  return{...a,computed:a.level,level,trend};
+  let level=a.level,ovActive=false,ovCleared=false;
+  if(p.override&&p.override.level){const lv=latest(p,0);
+    if(lv&&new Date(lv.at)>new Date(p.override.at))ovCleared=true;          /* new vitals since the override */
+    else if(a.red.length&&p.override.level!=="red")ovCleared=true;         /* never hide danger signs */
+    else{level=p.override.level;ovActive=true}}
+  return{...a,computed:a.level,level,trend,ovActive,ovCleared};
 }
 
 /* ---------- samples ---------- */
@@ -254,12 +269,12 @@ function get(id){return S.patients.find(p=>p.id===id)}
 function wardView(){
   const adm=S.patients.filter(p=>p.status==="admitted").map(p=>({p,s:status(p)}));
   adm.sort((a,b)=>LV[a.s.level].rank-LV[b.s.level].rank||(b.s.score||0)-(a.s.score||0));
-  const counts={red:0,orange:0,yellow:0,green:0,none:0};adm.forEach(x=>counts[x.s.level]++);
+  const counts={red:0,orange:0,yellow:0,inc:0,green:0,none:0};adm.forEach(x=>counts[x.s.level]++);
   const ql=q.trim().toLowerCase();
   const shown=adm.filter(x=>(!filter||x.s.level===filter)&&(!ql||[x.p.name,x.p.bed,x.p.ipd,x.p.diagnosis].join(" ").toLowerCase().includes(ql)));
   const anySample=S.patients.some(p=>p.sample);
   let h=`<div class="counts" role="group" aria-label="Filter by severity">`;
-  ["red","orange","yellow","green","none"].forEach(l=>{if(l==="none"&&!counts.none)return;h+=`<button class="chip filter lv-${l}" data-action="filter" data-lv="${l}" aria-pressed="${filter===l}"><i style="background:var(--c)"></i>${LV[l].label} ${counts[l]}</button>`});
+  ["red","orange","yellow","inc","green","none"].forEach(l=>{if((l==="none"||l==="inc")&&!counts[l])return;h+=`<button class="chip filter lv-${l}" data-action="filter" data-lv="${l}" aria-pressed="${filter===l}"><i style="background:var(--c)"></i>${LV[l].label} ${counts[l]}</button>`});
   h+=`</div>`;
   h+=`<p class="sample-note">${adm.length} admitted · sorted sickest first${anySample?` · <b>Sample patients shown</b>, not real data`:``}</p>`;
   h+=`<input class="search" id="search" type="search" placeholder="Search name, bed, IPD no., diagnosis" value="${esc(q)}">`;
@@ -274,7 +289,7 @@ function wardView(){
         <span class="meta">${ageText(p.dob)} · ${esc(p.sex)} · ${p.weight?esc(p.weight)+" kg · ":""}Day ${dayOf(p)} · ${esc(p.ipd||"")}</span>
         <span class="dx">${esc(p.diagnosis||"Diagnosis not entered")}</span>
         ${s.red.length?`<span class="flagline">⚠ ${esc(s.red[0])}${s.red.length>1?` +${s.red.length-1} more`:""}</span>`:""}
-        ${p.override?`<span class="meta">Colour set manually: ${esc(p.override.reason)}</span>`:""}
+        ${s.ovActive?`<span class="meta">Colour set manually: ${esc(p.override.reason)}</span>`:""}
         ${alertBadge(p)}
       </span>
       <span class="side"><span class="score">${s.score==null?"–":s.score}</span><span class="trend ${s.trend||""}">${trendText(s.trend)}</span><span class="trend">${lv?since(lv.at):"no vitals"}</span></span>
@@ -298,7 +313,9 @@ function patientView(p){
   h+=`<h2>${esc(p.name)} ${p.sample?`<span class="tag">sample</span>`:""}</h2>`;
   h+=`<div class="muted">Bed ${esc(p.bed||"—")} · ${ageText(p.dob)} · ${esc(p.sex)} · Day ${dayOf(p)} of admission${p.status==="discharged"?" · <b>Discharged</b>":""}</div>`;
   h+=`<div class="banner lv-${s.level}"><div class="lvl"><span>● ${LV[s.level].label}</span><span class="score">PEWS ${s.score==null?"–":s.score}</span></div>`;
-  if(p.override)h+=`<div>Colour set manually to <b>${LV[p.override.level].label}</b> (calculated: ${LV[s.computed].label}). Reason: ${esc(p.override.reason)} · ${when(p.override.at)}</div>`;
+  if(s.ovCleared)h+=`<div class="muted">Manual colour (${LV[p.override.level].label}) no longer applied: ${s.red.length&&p.override.level!=="red"?"danger signs present":"new vitals entered since"}.</div>`;
+  if(s.missing&&s.missing.length&&s.level!=="none")h+=`<div>Not recorded: ${s.missing.join(", ")}</div>`;
+  if(s.ovActive)h+=`<div>Colour set manually to <b>${LV[p.override.level].label}</b> (calculated: ${LV[s.computed].label}). Reason: ${esc(p.override.reason)} · ${when(p.override.at)}</div>`;
   if(s.trend)h+=`<div class="trend ${s.trend}">Trend since last vitals: ${trendText(s.trend)}</div>`;
   if(s.red.length)h+=`<div><b>Danger signs</b><ul>${s.red.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
   if(s.warn.length)h+=`<div><b>Also check</b><ul>${s.warn.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
@@ -306,7 +323,7 @@ function patientView(p){
   h+=`<div class="actions"><button class="primary" data-action="vitals" data-id="${p.id}">Add vitals</button><button data-action="note" data-id="${p.id}">Progress note</button><button data-action="checks" data-id="${p.id}">Checklist</button><button data-action="meds" data-id="${p.id}">Medicines</button><button data-action="inv" data-id="${p.id}">Investigations</button><button data-action="lines" data-id="${p.id}">Lines</button><button data-action="calc" data-id="${p.id}">Calculators</button><button class="ghost" data-action="override" data-id="${p.id}">Set colour</button></div>`;
   h+=alertsPanel(p);
   h+=`<h3>Latest vitals ${v?"· "+when(v.at):""}</h3>`;
-  if(v){h+=`<div class="vgrid">${vbox("HR",v.hr,"/min",pt("Heart rate"))}${vbox("RR",v.rr,"/min",pt("Resp. rate"))}${vbox("SpO₂",v.spo2,"%",pt("SpO₂"))}${vbox("Temp",v.temp,"°C",pt("Temp"))}${vbox("CRT",v.crt,"s",pt("CRT"))}${vbox("SBP",v.sbp,"mmHg",v.sbp!=null&&v.sbp<minSBP(p.dob)?3:null)}${vbox("AVPU",v.avpu,"",pt("AVPU"))}${vbox("GCS",v.gcs,"/15",v.gcs!=null&&v.gcs<=8?3:null)}${vbox("Sugar",v.sugar,"mg/dL",null)}${vbox("Urine",v.uo,"mL/kg/h",null)}${vbox("O₂",v.o2?(v.o2==="high"?"High-flow":"Low-flow"):"Air","",pt("On oxygen"))}${vbox("Breathing",v.wob||"–","",pt("Work of breathing"))}</div>`;
+  if(v){h+=`<div class="vgrid">${vbox("HR",v.hr,"/min",pt("Heart rate"))}${vbox("RR",v.rr,"/min",pt("Resp. rate"))}${vbox("SpO₂",v.spo2,"%",pt("SpO₂"))}${vbox("Temp",v.temp,"°C",pt("Temp"))}${vbox("CRT",v.crt,"s",pt("CRT"))}${vbox("SBP",v.sbp,"mmHg",v.sbp!=null&&v.sbp<minSBP(p.dob)?3:null)}${vbox("AVPU",v.avpu,"",pt("AVPU"))}${vbox("GCS",v.gcs,"/15",v.gcs!=null&&v.gcs<=8?3:null)}${v.map!=null?vbox("MAP",v.map,"mmHg",null):""}${vbox("Sugar",v.sugar,"mg/dL",null)}${vbox("Urine",v.uo,"mL/kg/h",null)}${vbox("O₂",v.o2?(v.o2==="high"?"High-flow":"Low-flow"):"Air","",pt("On oxygen"))}${vbox("Breathing",v.wob||"–","",pt("Work of breathing"))}</div>`;
     h+=`<p class="muted" style="font-size:.82rem">Ranges used: ${R.label} · HR ${R.hr.join("–")} · RR ${R.rr.join("–")} · min SBP ${minSBP(p.dob)}</p>`;
     h+=`<h3>Score breakdown</h3><div class="tablewrap"><table><thead><tr><th>Parameter</th><th>Value</th><th>Points</th></tr></thead><tbody>${s.parts.map(x=>`<tr><td>${x.name}${x.why?` <span class="muted">(${x.why})</span>`:""}</td><td class="mono">${esc(x.val)}</td><td class="mono">${x.pts}</td></tr>`).join("")}<tr><td><b>Total</b></td><td></td><td class="mono"><b>${s.score}</b></td></tr></tbody></table></div>`;
   }else h+=`<div class="panel muted">No vitals recorded yet.</div>`;
@@ -332,7 +349,7 @@ function spark(p){
   const line=pts.map((s,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(s).toFixed(1)).join(" ");
   const ref=[3,5,7].map(t=>`<line x1="0" x2="${W}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="${W-2}" y="${Y(t)-2}" font-size="9" text-anchor="end" fill="var(--muted)">${t}</text>`).join("");
   const last=pts[n-1],lc=assess(p,latest(p,0)).level;
-  return`<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="PEWS trend">${ref}<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/>${pts.map((s,i)=>`<circle cx="${X(i)}" cy="${Y(s)}" r="${i===n-1?4:2.5}" fill="${i===n-1?`var(--${lc})`:"var(--accent)"}"/>`).join("")}</svg><div class="muted" style="font-size:.8rem">PEWS over the last ${n} entries · latest ${last} · dashed lines mark yellow 3, orange 5, red 7</div>`;
+  return`<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="PEWS trend">${ref}<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/>${pts.map((s,i)=>`<circle cx="${X(i)}" cy="${Y(s)}" r="${i===n-1?4:2.5}" fill="${i===n-1?`var(--${lc==="inc"?"none":lc})`:"var(--accent)"}"/>`).join("")}</svg><div class="muted" style="font-size:.8rem">PEWS over the last ${n} entries · latest ${last} · dashed lines mark yellow 3, orange 5, red 7</div>`;
 }
 
 function field(id,label,val,type,extra){return`<label for="${id}">${label}<input id="${id}" name="${id}" type="${type||"text"}" value="${esc(val??"")}" ${extra||""}></label>`}
@@ -376,6 +393,7 @@ function vitalsView(p){
    ${sel("v-avpu","AVPU","",[["","Not assessed"],["A","Alert"],["V","Voice"],["P","Pain"],["U","Unresponsive"]])}
    ${field("v-gcs","GCS","","number","min=\"3\" max=\"15\" inputmode=\"numeric\"")}
    ${field("v-sugar","Blood sugar mg/dL","","number","inputmode=\"numeric\"")}
+   ${field("v-map","Mean BP (MAP)","","number","inputmode=\"numeric\"")}
    ${field("v-uo","Urine mL/kg/h","","number","step=\"0.1\" inputmode=\"decimal\"")}
    <label class="check" for="v-seizure"><input id="v-seizure" type="checkbox"> Convulsion</label>
    <label class="check" for="v-apnoea"><input id="v-apnoea" type="checkbox"> Apnoea</label>
@@ -383,9 +401,11 @@ function vitalsView(p){
    <div class="full actions"><button type="submit" class="primary">Save vitals</button></div>
   </form>`;
 }
+const VLIM={hr:["Heart rate",20,300],rr:["Resp. rate",0,150],spo2:["SpO₂",30,100],temp:["Temperature",28,44],crt:["CRT",0,10],sbp:["Systolic BP",20,250],map:["MAP",10,200],gcs:["GCS",3,15],sugar:["Blood sugar",5,1500],uo:["Urine output",0,20]};
+function badVital(v){for(const k in VLIM){if(v[k]!=null&&(v[k]<VLIM[k][1]||v[k]>VLIM[k][2]))return`${VLIM[k][0]} ${v[k]} looks wrong (allowed ${VLIM[k][1]}–${VLIM[k][2]}). Check for a typo.`}return null}
 function readVitals(){
   const g=id=>num($("#"+id).value),s=id=>$("#"+id).value||null;
-  const v={at:new Date().toISOString(),hr:g("v-hr"),rr:g("v-rr"),spo2:g("v-spo2"),o2:s("v-o2"),wob:s("v-wob"),temp:g("v-temp"),crt:g("v-crt"),sbp:g("v-sbp"),avpu:s("v-avpu"),gcs:g("v-gcs"),sugar:g("v-sugar"),uo:g("v-uo"),seizure:$("#v-seizure").checked,apnoea:$("#v-apnoea").checked};
+  const v={at:new Date().toISOString(),hr:g("v-hr"),rr:g("v-rr"),spo2:g("v-spo2"),o2:s("v-o2"),wob:s("v-wob"),temp:g("v-temp"),crt:g("v-crt"),sbp:g("v-sbp"),map:g("v-map"),avpu:s("v-avpu"),gcs:g("v-gcs"),sugar:g("v-sugar"),uo:g("v-uo"),seizure:$("#v-seizure").checked,apnoea:$("#v-apnoea").checked};
   Object.keys(v).forEach(k=>{if(v[k]===null||v[k]===false)delete v[k]});return v;
 }
 function updatePreview(){
@@ -451,11 +471,18 @@ document.addEventListener("submit",e=>{
     const d={name:g("f-name"),dob:g("f-dob"),sex:g("f-sex"),ipd:g("f-ipd"),bed:g("f-bed"),unit:g("f-unit"),consultant:g("f-consultant"),admittedAt:new Date(g("f-admitted")||Date.now()).toISOString(),weight:num(g("f-weight")),diagnosis:g("f-dx"),gaWeeks:num(g("f-ga")),birthWeight:num(g("f-bw")),referredFrom:g("f-ref"),transport:g("f-transport"),scheme:g("f-scheme")};
     if(!d.name||!d.dob){toast("Name and date of birth are required");return}
     if(new Date(d.dob)>new Date()){toast("Date of birth can't be in the future");return}
+    if(new Date(d.admittedAt)>new Date(Date.now()+10*6e4)){toast("Admission time can't be in the future");return}
+    if(new Date(d.admittedAt)<new Date(d.dob)){toast("Admission is before the date of birth");return}
+    if(d.weight!=null&&(d.weight<=0||d.weight>150)){toast("Weight must be between 0 and 150 kg");return}
+    if(d.gaWeeks!=null&&(d.gaWeeks<22||d.gaWeeks>44)){toast("Gestation must be 22–44 weeks");return}
+    if(d.birthWeight!=null&&(d.birthWeight<0.3||d.birthWeight>6)){toast("Birth weight must be 0.3–6 kg");return}
+    const wq=weightCheck({dob:d.dob},d.weight);if(wq&&f.dataset.wok!==String(d.weight)){f.dataset.wok=String(d.weight);toast(wq+" Tap again to confirm.");return}
     if(id){const P=get(id);if(d.weight&&d.weight!==P.weight)P.weights.push({at:new Date().toISOString(),kg:d.weight});Object.assign(P,d);save();view={name:"patient",id};toast("Details saved")}
     else{const p=Object.assign({id:uid(),status:"admitted",vitals:[],notes:[],override:null},d);normalize(p);if(d.weight)p.weights=[{at:new Date().toISOString(),kg:d.weight}];S.patients.push(p);save();view={name:"vitals",id:p.id};toast("Admitted. Enter first vitals")}
     render();if(view.name==="vitals")updatePreview();
   }else if(f.id==="vform"){
     const v=readVitals();if(Object.keys(v).length<2){toast("Enter at least one value");return}
+    const bad=badVital(v);if(bad){toast(bad);return}
     const p=get(id);p.vitals.push(v);save();view={name:"patient",id};render();toast("Vitals saved · "+LV[status(p).level].label);
   }else if(f.id==="nform"){
     const n={at:new Date().toISOString(),s:$("#n-s").value.trim(),o:$("#n-o").value.trim(),a:$("#n-a").value.trim(),p:$("#n-p").value.trim()};
@@ -484,6 +511,14 @@ function normalize(p){
   if(p.fluidPct==null)p.fluidPct=100;
 }
 
+/* ---- weight-for-age plausibility: catches decimal / 10-fold weight errors ---- */
+function expectedWeight(dob){const d=ageDays(dob),m=d/30.44,y=d/365.25;
+  if(d<28)return null;if(m<12)return 0.5*m+4;if(y<6)return 2*y+8;return 3*y+7}
+function weightCheck(p,w){if(!w||!p.dob)return null;const d=ageDays(p.dob);
+  if(d<28)return(w<0.4||w>6)?`Weight ${w} kg is implausible for a neonate. Check for a decimal error.`:null;
+  const e=expectedWeight(p.dob);if(e&&(w<0.45*e||w>2.2*e))return`Weight ${w} kg is far from the expected ~${Math.round(e)} kg for age. Check for a decimal error.`;
+  return null}
+
 /* ---- formulary ----
    Doses as commonly used by Indian paediatricians (IAP Drug Formulary, Harriet Lane, BNFc).
    per = mg/kg/dose range · max = mg/dose · dayMax = mg/kg/day · dayAbs = mg/day
@@ -492,8 +527,8 @@ function normalize(p){
 const yrs=p=>ageDays(p.dob)/365.25;
 const FORM=[
  /* Antimicrobials */
- {g:"Antimicrobials",id:"amoxicillin",name:"Amoxicillin (oral)",per:[15,45],max:1000,dayMax:90,freq:"8–12-hourly (25–50 mg/kg/day; 80–90 high dose)",abx:1,forms:[{l:"Drops 100 mg/mL",c:100},{l:"Syrup 125 mg/5 mL",c:25},{l:"Syrup 250 mg/5 mL",c:50}]},
- {g:"Antimicrobials",id:"coamox",name:"Amoxicillin-clavulanate (oral)",per:[15,45],max:875,dayMax:90,freq:"12-hourly (dose as amoxicillin)",abx:1,forms:[{l:"Syrup 228.5 mg/5 mL (200 mg amox)",c:40},{l:"Syrup 457 mg/5 mL (400 mg amox)",c:80}]},
+ {g:"Antimicrobials",id:"amoxicillin",name:"Amoxicillin (oral)",per:[8,45],max:1000,dayMax:90,freq:"8–12-hourly (25–50 mg/kg/day; 80–90 high dose)",abx:1,forms:[{l:"Drops 100 mg/mL",c:100},{l:"Syrup 125 mg/5 mL",c:25},{l:"Syrup 250 mg/5 mL",c:50}]},
+ {g:"Antimicrobials",id:"coamox",name:"Amoxicillin-clavulanate (oral)",per:[12,45],max:875,dayMax:90,freq:"12-hourly (dose as amoxicillin)",abx:1,forms:[{l:"Syrup 228.5 mg/5 mL (200 mg amox)",c:40},{l:"Syrup 457 mg/5 mL (400 mg amox)",c:80}]},
  {g:"Antimicrobials",id:"coamox-iv",name:"Amoxicillin-clavulanate (IV)",per:[25,30],max:1200,freq:"8-hourly (12-hourly < 3 mo)",abx:1,note:"dose as combined amoxicillin + clavulanate"},
  {g:"Antimicrobials",id:"ampicillin",name:"Ampicillin",per:[25,100],max:2000,dayMax:400,freq:"6-hourly (neonate 8–12-hourly)",abx:1,note:"50 mg/kg/dose usual; 100 mg/kg/dose for meningitis"},
  {g:"Antimicrobials",id:"cloxacillin",name:"Cloxacillin",per:[25,50],max:2000,freq:"6-hourly",abx:1,forms:[{l:"Syrup 125 mg/5 mL",c:25}]},
@@ -506,17 +541,17 @@ const FORM=[
  {g:"Antimicrobials",id:"piptaz",name:"Piperacillin-tazobactam",per:[80,100],max:4000,freq:"6–8-hourly",abx:1,note:"dose as piperacillin"},
  {g:"Antimicrobials",id:"meropenem",name:"Meropenem",per:[20,40],max:2000,freq:"8-hourly",abx:1,note:"20 mg/kg/dose usual; 40 mg/kg/dose for meningitis"},
  {g:"Antimicrobials",id:"vancomycin",name:"Vancomycin",per:[10,15],dayMax:60,freq:"6-hourly (neonate 8–24-hourly)",abx:1,note:"infuse over 60 min; monitor trough"},
- {g:"Antimicrobials",id:"gentamicin",name:"Gentamicin",per:[4,7.5],freq:"once daily (neonate 4–5 mg/kg 24–48-hourly)",abx:1,forms:[{l:"Inj 10 mg/mL (paediatric)",c:10},{l:"Inj 40 mg/mL",c:40}]},
- {g:"Antimicrobials",id:"amikacin",name:"Amikacin",per:[15,20],max:1500,freq:"once daily (neonate 15 mg/kg 24–48-hourly)",abx:1,forms:[{l:"Inj 100 mg/2 mL",c:50},{l:"Inj 500 mg/2 mL",c:250}]},
+ {g:"Antimicrobials",id:"gentamicin",name:"Gentamicin",per:[2,7.5],dayMax:7.5,freq:"once daily (neonate 4–5 mg/kg 24–48-hourly)",abx:1,forms:[{l:"Inj 10 mg/mL (paediatric)",c:10},{l:"Inj 40 mg/mL",c:40}]},
+ {g:"Antimicrobials",id:"amikacin",name:"Amikacin",per:[7.5,20],dayMax:22.5,max:1500,freq:"once daily (neonate 15 mg/kg 24–48-hourly)",abx:1,forms:[{l:"Inj 100 mg/2 mL",c:50},{l:"Inj 500 mg/2 mL",c:250}]},
  {g:"Antimicrobials",id:"azithromycin",name:"Azithromycin",per:[5,20],max:1000,freq:"once daily",abx:1,note:"10 mg/kg day 1 then 5 mg/kg; enteric fever 10–20 mg/kg (max 1 g)",forms:[{l:"Syrup 100 mg/5 mL",c:20},{l:"Syrup 200 mg/5 mL",c:40}]},
  {g:"Antimicrobials",id:"clarithromycin",name:"Clarithromycin",per:[7.5,7.5],max:500,freq:"12-hourly",abx:1,forms:[{l:"Syrup 125 mg/5 mL",c:25}]},
  {g:"Antimicrobials",id:"cotrimoxazole",name:"Cotrimoxazole (as trimethoprim)",per:[4,5],max:160,freq:"12-hourly (PCP 5 mg/kg 6–8-hourly)",abx:1,note:"avoid < 6 weeks",forms:[{l:"Syrup 40 mg TMP/5 mL",c:8}]},
  {g:"Antimicrobials",id:"doxycycline",name:"Doxycycline",per:[2,2.5],max:100,freq:"12-hourly",abx:1,note:"scrub typhus / rickettsia; short courses acceptable at any age"},
- {g:"Antimicrobials",id:"metronidazole",name:"Metronidazole",per:[7.5,10],max:500,freq:"8-hourly",abx:1,forms:[{l:"Syrup 200 mg/5 mL (benzoyl)",c:40},{l:"Inj 500 mg/100 mL",c:5}]},
+ {g:"Antimicrobials",id:"metronidazole",name:"Metronidazole",per:[7.5,17],max:750,dayMax:50,freq:"8-hourly",note:"amoebiasis 35–50 mg/kg/day",abx:1,forms:[{l:"Suspension 200 mg/5 mL (as benzoate)",c:40},{l:"Inj 500 mg/100 mL",c:5}]},
  {g:"Antimicrobials",id:"linezolid",name:"Linezolid",per:[10,10],max:600,freq:"8-hourly (< 12 y), 12-hourly ≥ 12 y",abx:1,forms:[{l:"Syrup 100 mg/5 mL",c:20},{l:"Inj 600 mg/300 mL",c:2}]},
  {g:"Antimicrobials",id:"acyclovir",name:"Acyclovir (IV)",per:[10,20],freq:"8-hourly",abx:1,note:"20 mg/kg/dose for HSV encephalitis and neonates"},
- {g:"Antimicrobials",id:"fluconazole",name:"Fluconazole",per:[6,12],max:800,freq:"once daily (loading 12 mg/kg)",abx:1},
- {g:"Antimicrobials",id:"artesunate",name:"Artesunate (IV)",per:[2.4,3],freq:"at 0, 12, 24 h then once daily",abx:1,note:"3 mg/kg if < 20 kg, 2.4 mg/kg if ≥ 20 kg"},
+ {g:"Antimicrobials",id:"fluconazole",name:"Fluconazole",per:[3,12],max:800,freq:"once daily (loading 12 mg/kg)",abx:1},
+ {g:"Antimicrobials",id:"artesunate",name:"Artesunate (IV)",per:[2.4,3],byWt:1,freq:"at 0, 12, 24 h then once daily",abx:1,note:"3 mg/kg if < 20 kg, 2.4 mg/kg if ≥ 20 kg"},
  /* Fever and pain */
  {g:"Fever and pain",id:"paracetamol",name:"Paracetamol",per:[10,15],max:1000,dayMax:60,dayAbs:4000,freq:"6-hourly (not more often than 4-hourly)",note:"IV in neonates 7.5–10 mg/kg",forms:[{l:"Drops 100 mg/mL",c:100},{l:"Syrup 120 mg/5 mL",c:24},{l:"Syrup 250 mg/5 mL",c:50},{l:"Inj 10 mg/mL (IV)",c:10}]},
  {g:"Fever and pain",id:"ibuprofen",name:"Ibuprofen",per:[5,10],max:400,dayMax:40,freq:"6–8-hourly",nsaid:1,note:"avoid in dengue, dehydration, AKI; not < 3 months",forms:[{l:"Syrup 100 mg/5 mL",c:20}]},
@@ -547,14 +582,14 @@ const FORM=[
  {g:"GI and nutrition",id:"vitamin-a",name:"Vitamin A (measles / SAM)",unit:"IU",fixed:p=>{const m=ageDays(p.dob)/30.44;return m<6?{v:50000,u:"IU"}:m<12?{v:100000,u:"IU"}:{v:200000,u:"IU"}},freq:"day 1, 2 (and 14 if eye signs)",note:"< 6 mo 50,000 · 6–12 mo 1 lakh · > 12 mo 2 lakh IU",forms:[{l:"Solution 1 lakh IU/mL",c:100000}]},
  {g:"GI and nutrition",id:"albendazole",name:"Albendazole",fixed:p=>yrs(p)<1?null:{v:yrs(p)<2?200:400,u:"mg"},freq:"single dose",note:"200 mg at 1–2 y, 400 mg ≥ 2 y",forms:[{l:"Suspension 400 mg/10 mL",c:40}]},
  /* Neonatal */
- {g:"Neonatal",id:"vitamin-k",name:"Vitamin K (newborn)",fixed:p=>({v:wt(p)&&wt(p)<1?0.5:1,u:"mg"}),freq:"single IM dose at birth",note:"1 mg; 0.5 mg if < 1 kg",forms:[{l:"Inj 1 mg/0.5 mL",c:2}]},
+ {g:"Neonatal",id:"vitamin-k",name:"Vitamin K (newborn)",fixed:p=>({v:wt(p)&&wt(p)<1?0.5:1,u:"mg"}),freq:"single IM dose at birth",note:"1 mg; 0.5 mg if < 1 kg. Use the neonatal 1 mg/0.5 mL ampoule, not the 10 mg/mL adult one",forms:[{l:"Inj 1 mg/0.5 mL",c:2}]},
  {g:"Neonatal",id:"caffeine-load",name:"Caffeine citrate (loading)",per:[20,20],freq:"once",note:"apnoea of prematurity",forms:[{l:"Inj / oral 20 mg/mL",c:20}]},
  {g:"Neonatal",id:"caffeine",name:"Caffeine citrate (maintenance)",per:[5,10],freq:"once daily, 24 h after load",forms:[{l:"Inj / oral 20 mg/mL",c:20}]},
  /* Other */
  {g:"Other",id:"furosemide",name:"Furosemide",per:[0.5,2],max:40,freq:"12–24-hourly",forms:[{l:"Inj 10 mg/mL",c:10}]},
  {g:"Other",id:"spironolactone",name:"Spironolactone",per:[0.5,1.5],max:100,freq:"12-hourly (1–3 mg/kg/day)"},
- {g:"Other",id:"calcium",name:"Calcium gluconate 10%",per:[50,100],max:2000,freq:"slow IV over 10 min with ECG",note:"0.5–1 mL/kg of 10%",forms:[{l:"Inj 10% (100 mg/mL)",c:100}]},
- {g:"Other",id:"iron",name:"Iron (elemental)",per:[2,6],max:200,freq:"once daily (treatment 3–6 mg/kg/day)",note:"enter dose as elemental iron"},
+ {g:"Other",id:"calcium",name:"Calcium gluconate 10%",per:[50,100],neoPer:[100,200],max:2000,freq:"slow IV over 10 min with ECG",note:"0.5–1 mL/kg of 10%",forms:[{l:"Inj 10% (100 mg/mL)",c:100}]},
+ {g:"Other",id:"iron",name:"Iron (elemental)",per:[1,6],max:200,freq:"once daily (treatment 3–6 mg/kg/day)",note:"enter dose as elemental iron"},
  {g:"Other",id:"other",name:"Other (no automatic check)"}
 ];
 const FREQ=[[0.5,"48-hourly"],[0.667,"36-hourly"],[1,"Once daily / 24-hourly"],[1.333,"18-hourly"],[2,"12-hourly"],[3,"8-hourly"],[4,"6-hourly"],[6,"4-hourly"],[8,"3-hourly"]];
@@ -562,7 +597,7 @@ const FREQ=[[0.5,"48-hourly"],[0.667,"36-hourly"],[1,"Once daily / 24-hourly"],[
 /* ---- neonatal regimens by gestation (GA), postnatal age (PNA) and postmenstrual age (PMA) ----
    Based on NeoFax-style tables used in Indian NICUs. Applies to babies with gestation entered,
    PNA < 90 days and PMA < 48 weeks. */
-function neoAges(p){const ga=Number(p.gaWeeks);if(!ga)return null;const pna=ageDays(p.dob);const pma=ga+pna/7;if(pna>=90||pma>=48)return null;return{ga,pna,pma}}
+function neoAges(p){const ga=Number(p.gaWeeks);if(!ga)return null;const pna=ageDays(p.dob);const pmaExact=ga+pna/7;if(pna>=90||pmaExact>=48)return null;return{ga,pna,pma:Math.floor(pmaExact),pmaExact}}
 function pmaTable(pma,pna){ /* ampicillin, cefotaxime style */
   if(pma<=29)return pna<=28?12:8; if(pma<=36)return pna<=14?12:8; if(pma<=44)return pna<=7?12:8; return 6}
 const NEO={
@@ -577,7 +612,7 @@ const NEO={
   "phenobarb":()=>["3–5",24],
   caffeine:()=>["5–10",24]
 };
-function neoRegimen(p,drug){const a=neoAges(p);if(!a||!NEO[drug])return null;const [dose,h]=NEO[drug](a);return{dose,h,a,text:`Neonatal: ${dose} mg/kg every ${h} h (GA ${a.ga} wk, PNA ${a.pna} d, PMA ${r1(a.pma)} wk)`}}
+function neoRegimen(p,drug){const a=neoAges(p);if(!a||!NEO[drug])return null;const [dose,h]=NEO[drug](a);return{dose,h,a,text:`Neonatal: ${dose} mg/kg every ${h} h (GA ${a.ga} wk, PNA ${a.pna} d, PMA ${a.pma} wk)`}}
 function neoIntervalProblem(p,m){const r=neoRegimen(p,m.drug);if(!r)return null;const h=24/(m.perDay||1);return Math.abs(h-r.h)>1.5?`interval every ${Math.round(h)} h; usual every ${r.h} h for GA ${r.a.ga} wk, PNA ${r.a.pna} d`:null}
 function fx(id){return FORM.find(f=>f.id===id)}
 function r1(x){return Math.round(x*10)/10}
@@ -589,10 +624,22 @@ function usualText(p,f){
   const w=wt(p);if(!f.per||!w)return"";const lo=Math.min(f.per[0]*w,f.max||1e9),hi=Math.min(f.per[1]*w,f.max||1e9);
   return`Usual: ${r2(lo)}${hi!==lo?"–"+r2(hi):""} mg per dose${f.max?` (max ${f.max} mg)`:""} · ${f.freq}`;
 }
+/* adjust a drug's limits for this patient (route, age, weight) */
+function rules(f,p,m){if(!f)return f;const w=wt(p);let g=f;
+  if(f.id==="paracetamol"&&m&&m.route==="IV"&&w&&w<10)g={...f,per:[7.5,10],dayMax:30,freq:"6-hourly IV (< 10 kg: max 30 mg/kg/day)"};
+  if(f.neoPer&&p.dob&&band(p.dob)==="neo")g={...f,per:f.neoPer};
+  if(f.byWt&&w)g={...f,per:w<20?[3,3]:[2.4,2.4],note:"3 mg/kg if < 20 kg, 2.4 mg/kg if ≥ 20 kg"};
+  return g}
+/* convert the entered dose to the drug's checking unit (mg, or IU for IU drugs); null = cannot convert */
+function toBase(f,m){const u=m.unit||"mg",d=Number(m.dose),base=f.unit||"mg";
+  if(u===base)return d;if(base==="mg"&&u==="mcg")return d/1000;
+  if(u==="mL"){const fo=f.forms&&f.forms.find(x=>x.l===m.form);return fo&&fo.c?d*fo.c:null}
+  return null}
 function checkDose(p,m){
-  const f=fx(m.drug),w=wt(p);
+  const f0=fx(m.drug),f=rules(f0,p,m),w=wt(p);
   if(!f||(!f.per&&!f.fixed))return{st:"unknown",text:"No automatic check for this drug"};
-  const d=Number(m.dose);
+  const d=toBase(f,m);
+  if(d==null)return{st:"noweight",text:m.unit==="mL"?"Choose the formulation to check a dose entered in mL":`Can't check a dose in ${m.unit}; enter it in ${f.unit||"mg"}`};
   if(f.fixed){const e=f.fixed(p);if(!e)return{st:"low",text:"Not usually given at this age"};
     if(Math.abs(d-e.v)/e.v<=0.05)return{st:"ok",text:`Matches usual ${e.v.toLocaleString("en-IN")} ${e.u} for age/weight`};
     return{st:d>e.v?"high":"low",text:`${d>e.v?"Above":"Below"} usual ${e.v.toLocaleString("en-IN")} ${e.u} for age/weight`}}
@@ -602,7 +649,7 @@ function checkDose(p,m){
   if(pk>f.per[1]*1.1&&!(f.max&&d<=f.max&&pk>f.per[1]*1.1&&w*f.per[0]>f.max))probs.push(`${r1(pk)} mg/kg/dose is above ${f.per[1]}`);
   if(f.dayMax&&day/w>f.dayMax*1.05)probs.push(`${r1(day/w)} mg/kg/day is above ${f.dayMax}`);
   if(f.dayAbs&&day>f.dayAbs)probs.push(`${day} mg/day is above ${f.dayAbs}`);
-  if(probs.length)return{st:"high",text:"Possible overdose: "+probs.join("; ")};
+  if(probs.length)return{st:"high",text:"Possible overdose: "+probs.join("; ")+(m.unit&&m.unit!==(f.unit||"mg")?` (${r2(d)} ${f.unit||"mg"})`:"")};
   const capped=f.max&&f.per[0]*w>f.max;
   if(pk<f.per[0]*0.9&&!(capped&&d>=f.max*0.9))return{st:"low",text:`${r1(pk)} mg/kg/dose is below usual ${f.per[0]}–${f.per[1]}`};
   return{st:"ok",text:`${r1(pk)} mg/kg/dose · usual ${f.per[0]}${f.per[1]!==f.per[0]?"–"+f.per[1]:""} mg/kg ${f.freq}`};
@@ -611,27 +658,28 @@ function checkDose(p,m){
 /* ---- labs with age-aware ranges and critical limits ---- */
 const LABS=[
  {id:"na",name:"Sodium",unit:"mmol/L",lo:135,hi:145,clo:125,chi:155},
- {id:"k",name:"Potassium",unit:"mmol/L",lo:3.5,hi:5.5,clo:2.5,chi:6.5},
+ {id:"k",name:"Potassium",unit:"mmol/L",lo:3.5,hi:5.5,clo:2.5,chi:6.5,neo:{lo:3.7,hi:6.0,chi:7.0}},
  {id:"glu",name:"Blood glucose",unit:"mg/dL",lo:70,hi:140,clo:54,chi:300,neo:{lo:45,clo:45}},
  {id:"hb",name:"Haemoglobin",unit:"g/dL",lo:10,hi:15,clo:7,neo:{lo:14,hi:22,clo:10}},
  {id:"plt",name:"Platelets",unit:"×10³/µL",lo:150,hi:450,clo:20},
- {id:"tlc",name:"Total leucocyte count",unit:"×10³/µL",lo:4,hi:11,clo:1,chi:30,neo:{lo:5,hi:30}},
+ {id:"tlc",name:"Total leucocyte count",unit:"×10³/µL",lo:4.5,hi:11,clo:1,chi:30,neo:{lo:5,hi:30},inf:{lo:6,hi:17.5},tod:{lo:5.5,hi:15.5},sch:{lo:4.5,hi:13.5}},
  {id:"crp",name:"CRP",unit:"mg/L",hi:10},
  {id:"hct",name:"Haematocrit",unit:"%",lo:33,hi:45,neo:{lo:42,hi:65}},
- {id:"cr",name:"Serum creatinine",unit:"mg/dL",hi:1.0,chi:3},
- {id:"ca",name:"Serum calcium (total)",unit:"mg/dL",lo:8.5,hi:10.5,clo:7,chi:13},
- {id:"tsb",name:"Total serum bilirubin",unit:"mg/dL",hi:12,chi:20},
+ {id:"cr",name:"Serum creatinine",unit:"mg/dL",hi:1.2,chi:3,neo:{hi:1.0,chi:1.5},inf:{hi:0.5,chi:1.5},tod:{hi:0.6,chi:2},sch:{hi:0.9,chi:2.5}},
+ {id:"ca",name:"Serum calcium (total)",unit:"mg/dL",lo:8.5,hi:10.5,clo:7,chi:13,neo:{lo:8,hi:11}},
+ {id:"tsb",name:"Total serum bilirubin",unit:"mg/dL",hi:1.2,chi:15,neo:{hi:null,chi:20,nomo:1}},
  {id:"ph",name:"Blood gas pH",unit:"",lo:7.35,hi:7.45,clo:7.1,chi:7.6},
  {id:"hco3",name:"Bicarbonate",unit:"mmol/L",lo:22,hi:26,clo:10},
  {id:"bcs",name:"Blood culture",unit:"",text:1},{id:"ucs",name:"Urine culture",unit:"",text:1},
  {id:"csf",name:"CSF analysis",unit:"",text:1},{id:"cxr",name:"Chest X-ray",unit:"",text:1},
  {id:"ns1",name:"Dengue NS1 / IgM",unit:"",text:1},{id:"ketones",name:"Urine / blood ketones",unit:"",text:1}
 ];
-function labRange(p,l){return band(p.dob)==="neo"&&l.neo?Object.assign({},l,l.neo):l}
+function labRange(p,l){const b=band(p.dob);return l[b]?Object.assign({},l,l[b]):l}
 function flagLab(p,inv){
   const l=LABS.find(x=>x.name===inv.test);if(!l||l.text||inv.value==null||inv.value==="")return null;
   const r=labRange(p,l),v=Number(inv.value);
   if((r.clo!=null&&v<r.clo)||(r.chi!=null&&v>r.chi))return"critical";
+  if(r.nomo)return"nomogram";
   if((r.lo!=null&&v<r.lo)||(r.hi!=null&&v>r.hi))return v<(r.lo??-1e9)?"low":"high";
   return"normal";
 }
@@ -641,7 +689,7 @@ function holliday(w){return w<=10?100*w:w<=20?1000+50*(w-10):1500+20*(w-20)}
 function neoFluid(dol){return dol<=1?[60,80]:dol===2?[80,100]:dol===3?[100,120]:dol===4?[120,140]:[140,160]}
 function fluidTarget(p){
   const w=wt(p);if(!w)return null;
-  if(band(p.dob)==="neo"){const dol=ageDays(p.dob)+1,[a,b]=neoFluid(dol),mid=(a+b)/2;return{day:mid*w*p.fluidPct/100,range:[a,b],how:`Neonate day ${dol}: ${a}–${b} mL/kg/day`}}
+  if(band(p.dob)==="neo"){const dol=ageDays(p.dob)+1,[a,b]=neoFluid(dol),mid=(a+b)/2,bw=Number(p.birthWeight)||0,useBw=dol<=14&&bw>w,ww=useBw?bw:w;return{day:mid*ww*p.fluidPct/100,range:[a,b],how:`Neonate day ${dol}: ${a}–${b} mL/kg/day on ${useBw?"birth weight "+bw:"current weight "+w} kg`}}
   return{day:holliday(w)*p.fluidPct/100,how:"Holliday-Segar (100/50/20 mL/kg/day), maintenance only: excludes deficit replacement (DKA, dehydration)"};
 }
 
@@ -665,13 +713,13 @@ function alerts(p){
       if(d>=3&&d<=4&&!reviewed)add("med",`${name} day ${d}: 48–72 h review (cultures, de-escalate or stop?)`,"meds");
       if(d>=7&&!reviewed)add("med",`${name} day ${d}: confirm planned duration`,"meds");
       if(!m.stop)add("info",`${name}: no stop / review date set`,"meds");
-      else if(dateOf(m.stop)<=today())add("high",`${name}: stop date reached (${m.stop})`,"meds");
+      else if(String(m.stop).slice(0,10)<=today())add("high",`${name}: stop date reached (${m.stop})`,"meds");
     }
   });
   /* investigations */
   p.inv.forEach(i=>{
     if(i.status==="pending"){const h=hrsSince(i.orderedAt);if(h>=24)add(/culture/i.test(i.test)?"med":"info",`${i.test} pending ${Math.round(h)} h: chase result`,"inv")}
-    else if(!i.ack){const fl=flagLab(p,i);add(fl==="critical"?"high":"med",`${fl==="critical"?"CRITICAL ":"New "}result not acknowledged: ${i.test} ${i.value??i.result??""} ${(LABS.find(l=>l.name===i.test)||{}).unit||""}`,"inv")}
+    else if(!i.ack){const fl=flagLab(p,i);add(fl==="critical"?"high":"med",`${fl==="critical"?"CRITICAL ":"New "}result not acknowledged: ${i.test} ${i.value??i.result??""} ${(LABS.find(l=>l.name===i.test)||{}).unit||""}${fl==="nomogram"?" (plot on the AAP 2022 hour-specific chart for age in hours)":""}`,"inv")}
   });
   const anyCulture=p.inv.some(i=>/culture/i.test(i.test));
   if(p.meds.some(m=>m.active&&((fx(m.drug)||{}).abx||m.abx))&&!anyCulture)add("med","On antibiotics but no culture ordered","inv");
@@ -685,6 +733,7 @@ function alerts(p){
   const lw=p.weights[p.weights.length-1];
   if(!lw)add("high","No weight recorded: doses and fluids cannot be checked","checks");
   else if(dateOf(lw.at)!==today())add("info","No weight recorded today","checks");
+  {const wq=weightCheck(p,w);if(wq)add("high",wq+" All doses and fluids use this weight.","checks")}
   if(p.fluidRate!=null&&w){const t=fluidTarget(p);if(t){const tr=t.day/24,ratio=p.fluidRate/tr;
     if(ratio>1.2)add("high",`Fluids ${p.fluidRate} mL/h is ${Math.round(ratio*100)}% of target ${r1(tr)} mL/h`,"calc");
     else if(ratio<0.8)add("med",`Fluids ${p.fluidRate} mL/h is only ${Math.round(ratio*100)}% of target ${r1(tr)} mL/h`,"calc")}}
@@ -711,7 +760,7 @@ function alertsPanel(p){
 }
 
 /* ---- patient summaries for detail view ---- */
-function medVol(m){const f=fx(m.drug),fo=f&&f.forms&&m.form&&f.forms.find(x=>x.l===m.form);return fo&&fo.c?` (${r2(m.dose/fo.c)} mL ${fo.l})`:""}
+function medVol(m){const f=fx(m.drug),fo=f&&f.forms&&m.form&&f.forms.find(x=>x.l===m.form);if(!fo||!fo.c)return"";if(m.unit==="mL")return` (${r2(m.dose*fo.c)} ${f.unit||"mg"} of ${fo.l})`;const b=toBase(f,m);return b==null?"":` (${r2(b/fo.c)} mL ${fo.l})`}
 function medName(m){return m.drug==="other"?m.name:fx(m.drug).name}
 function medsSummary(p){
   const act=p.meds.filter(m=>m.active);
@@ -817,9 +866,11 @@ function resusRows(w,ageY){
   R.push(["Sodium bicarbonate 8.4%",`${f(w)} mL`,"1 mEq/kg; dilute 1:1 in neonates"]);
   R.push(["Midazolam IN / buccal",`${f(mx(0.2*w,10))}–${f(mx(0.3*w,10))} mg`,"0.2–0.3 mg/kg, max 10 mg"]);
   R.push(["3% saline",`${f(3*w)}–${f(5*w)} mL`,"3–5 mL/kg for raised ICP"]);
-  R.push(["Defibrillation",`${Math.round(4*w)} J`,"4 J/kg"]);
+  R.push(["Defibrillation",`${Math.round(2*w)} J first, then ${Math.round(4*w)} J`,"2 J/kg, then 4 J/kg (max 10 J/kg or adult dose)"]);
   R.push(["Synchronised cardioversion",`${f(0.5*w)}–${f(w)} J, then ${f(2*w)} J`,"0.5–1 J/kg, then 2 J/kg"]);
-  if(ageY!=null&&ageY>=1){const u=ageY/4+4,c=ageY/4+3.5;R.push(["ETT size",`uncuffed ${r1(Math.round(u*2)/2)} / cuffed ${r1(Math.round(c*2)/2)} mm`,`depth ≈ ${r1(3*Math.round(u*2)/2)} cm at lip`])}
+  if(ageY==null){R.push(["ETT size","Enter age","needed to choose the size formula"])}
+  else if(ageY>=1){const u=ageY/4+4,c=ageY/4+3.5;R.push(["ETT size",`uncuffed ${r1(Math.round(u*2)/2)} / cuffed ${r1(Math.round(c*2)/2)} mm`,`depth ≈ ${r1(3*Math.round(u*2)/2)} cm at lip`])}
+  else if(ageY>=28/365.25){const u=w<5?3.5:4,c=u-0.5;R.push(["ETT size (infant)",`uncuffed ${u} / cuffed ${c} mm`,`depth ≈ ${r1(3*u)} cm at lip`])}
   else{const e=w<1?2.5:w<2?3:w<3?3.5:3.5;R.push(["ETT size (neonate)",`${e} mm`,`depth ≈ ${r1(w+6)} cm at lip (weight + 6)`])}
   return R;
 }
@@ -863,7 +914,7 @@ function kdUpdate(){
   calcState.kd=f.id;calcState.kdose=d;calcState.kfreq=Number($("#kd-freq").value);
   if(!pp.weight&&!f.fixed){o.innerHTML="";return}
   let h=`<div class="panel"><div><b>${esc(usualText(pp,f)||"No automatic check for this drug")}</b></div>${f.note?`<div class="muted">${esc(f.note)}</div>`:""}`;
-  if(d){const c=checkDose(pp,{drug:f.id,dose:d,perDay:calcState.kfreq});h+=`<div class="ck ck-${c.st}" style="margin-top:6px">${esc(c.text)}</div>`;const v=volText(f,d);if(v)h+=`<div class="mono" style="margin-top:6px">= ${esc(v)}</div>`}
+  if(d){const c=checkDose(pp,{drug:f.id,dose:d,perDay:calcState.kfreq,unit:f.unit||"mg"});h+=`<div class="ck ck-${c.st}" style="margin-top:6px">${esc(c.text)}</div>`;const v=volText(f,d);if(v)h+=`<div class="mono" style="margin-top:6px">= ${esc(v)}</div>`}
   else if(f.forms&&f.per&&pp.weight){const lo=Math.min(f.per[0]*pp.weight,f.max||1e9),hi=Math.min(f.per[1]*pp.weight,f.max||1e9);h+=`<div class="muted" style="margin-top:6px">Volume: ${f.forms.filter(x=>x.c).map(x=>`${esc(x.l)} ${r2(lo/x.c)}${hi!==lo?"–"+r2(hi/x.c):""} mL`).join(" · ")}</div>`}
   else if(f.forms&&f.fixed){const e=f.fixed(pp);if(e)h+=`<div class="muted" style="margin-top:6px">= ${esc(volText(f,e.v))}</div>`}
   o.innerHTML=h+`</div>`;
@@ -876,11 +927,11 @@ function mUpdate(){
     if(fm&&fm.unit)$("#m-unit").value=fm.unit;else if(fm&&!other)$("#m-unit").value="mg";
     if(fm&&fm.fixed){const e=fm.fixed(p);if(e&&!$("#m-dose").value)$("#m-dose").value=e.v}}
   const dose=num($("#m-dose").value);let h="";
-  const u=usualText(p,fm);if(u&&!other)h+=`<div class="muted">${esc(u)}${fm.note?" · "+esc(fm.note):""}</div>`;
-  if(dose&&!other){const c=checkDose(p,{drug,dose,perDay:Number($("#m-freq").value)});h+=`<div class="ck ck-${c.st}">${esc(c.text)}</div>`;
+  const u=usualText(p,rules(fm,p,{route:$("#m-route").value}));if(u&&!other)h+=`<div class="muted">${esc(u)}${fm.note?" · "+esc(fm.note):""}</div>`;
+  if(dose&&!other){const c=checkDose(p,{drug,dose,perDay:Number($("#m-freq").value),unit:$("#m-unit").value,form:$("#m-form")?$("#m-form").value:"",route:$("#m-route").value});h+=`<div class="ck ck-${c.st}">${esc(c.text)}</div>`;
     const fsel=$("#m-form"),form=fsel&&fm.forms.find(x=>x.l===fsel.value);
     if(form&&fsel.dataset.last!==form.l){fsel.dataset.last=form.l;$("#m-route").value=/^Inj/.test(form.l)?($("#m-route").value==="IM"?"IM":"IV"):/Respule|Respirator/.test(form.l)?"Neb":"Oral"}
-    if(form&&form.c)h+=`<div class="mono">= ${r2(dose/form.c)} mL of ${esc(form.l)}</div>`;else{const v=volText(fm,dose);if(v)h+=`<div class="muted">= ${esc(v)}</div>`}}
+    if(form&&form.c&&$("#m-unit").value!=="mL")h+=`<div class="mono">= ${r2((toBase(fm,{dose,unit:$("#m-unit").value})??dose)/form.c)} mL of ${esc(form.l)}</div>`;else{const v=volText(fm,dose);if(v)h+=`<div class="muted">= ${esc(v)}</div>`}}
   if(fm&&fm.nsaid&&/dengue/i.test(p.diagnosis||""))h+=`<div class="ck ck-high">Patient has dengue: NSAIDs usually avoided</div>`;
   const nr=neoRegimen(p,drug);
   if(nr){h+=`<div class="ck ck-ok"><b>${esc(nr.text)}</b></div>`;if(fw.dataset.neo!==drug){fw.dataset.neo=drug;const best=FREQ.reduce((b,x)=>Math.abs(24/x[0]-nr.h)<Math.abs(24/b[0]-nr.h)?x:b);$("#m-freq").value=String(best[0])}
@@ -942,6 +993,8 @@ document.addEventListener("submit",e=>{
     p.lines.push({id:uid(),type:$("#l-type").value,site:$("#l-site").value.trim(),insertedAt:new Date($("#l-at").value||Date.now()).toISOString()});save();render2();toast("Added");
   }else if(f.id==="cform"){
     const c=p.checks,w=num($("#c-wt").value);
+    if(w!=null&&(w<=0||w>150)){toast("Weight must be between 0 and 150 kg");return}
+    const wq=weightCheck(p,w);if(wq&&f.dataset.wok!==String(w)){f.dataset.wok=String(w);toast(wq+" Tap Save again to confirm.");return}
     if(w){p.weights.push({at:new Date().toISOString(),kg:w});p.weight=w}
     c.ioDate=$("#c-io").checked?today():(c.ioDate===today()?null:c.ioDate);
     if($("#c-counsel").checked){if(!c.counselledAt||dateOf(c.counselledAt)!==today())c.counselledAt=new Date().toISOString()}else if(c.counselledAt&&dateOf(c.counselledAt)===today())c.counselledAt=null;
